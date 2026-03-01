@@ -20,7 +20,7 @@ import numpy as np
 
 # ── resolve imports from repo root ──────────────────────────────────────────
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from DWSIM.tasks.txy_engine import (
+from DWSIM_ry_test.tasks.txy_engine import (
     validate_task,
     run_txy_task,
     _mock_txy,

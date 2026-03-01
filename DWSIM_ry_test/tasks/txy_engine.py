@@ -39,7 +39,7 @@ sys.path.insert(0, _ROOT)
 DWSIM_AVAILABLE = False
 try:
     import clr as _clr_check  # noqa — confirms pythonnet is installed
-    from DWSIM.lib.dwsim_core import (
+    from DWSIM_ry_test.lib.dwsim_core import (
         init_dwsim,
         create_flowsheet,
         select_property_package,
