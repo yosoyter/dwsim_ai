@@ -1,0 +1,8 @@
+{
+    "task_type": "txy",
+    "component_1": "Ethanol",
+    "component_2": "Water",
+    "pressure_Pa": 101325.0,
+    "n_points": 20,
+    "property_package": "NRTL"
+}

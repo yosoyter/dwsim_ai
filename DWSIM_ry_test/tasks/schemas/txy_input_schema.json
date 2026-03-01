@@ -1,0 +1,43 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "DWSIM-AI Txy Task Input Schema",
+    "description": "JSON spec for a Txy (Temperature-Composition) phase diagram task. Group 1 produces this; Group 2 consumes it.",
+    "type": "object",
+    "required": ["task_type", "component_1", "component_2"],
+    "properties": {
+        "task_type": {
+            "type": "string",
+            "enum": ["txy"],
+            "description": "Must be 'txy' for this engine."
+        },
+        "component_1": {
+            "type": "string",
+            "description": "First component name — must match DWSIM compound database exactly.",
+            "examples": ["Ethanol", "Benzene", "Methanol", "Acetone"]
+        },
+        "component_2": {
+            "type": "string",
+            "description": "Second component name.",
+            "examples": ["Water", "Toluene", "Water", "Chloroform"]
+        },
+        "pressure_Pa": {
+            "type": "number",
+            "minimum": 1,
+            "default": 101325.0,
+            "description": "System pressure in Pascals. Default = 1 atm (101325 Pa)."
+        },
+        "n_points": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 100,
+            "default": 20,
+            "description": "Number of composition steps from x1=0 to x1=1."
+        },
+        "property_package": {
+            "type": "string",
+            "enum": ["NRTL", "UNIQUAC", "PR", "SRK", "IDEAL"],
+            "description": "Thermodynamic property package. Auto-selected if omitted (polar→NRTL, non-polar→PR)."
+        }
+    },
+    "additionalProperties": false
+}
