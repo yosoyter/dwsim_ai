@@ -5,7 +5,7 @@ import matplotlib.patches as mpatches
 import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MultipleLocator
 import numpy as np
-%matplotlib inline 
+
 # ── Data ─────────────────────────────────────────────────────────────────────
 
 import json
@@ -28,15 +28,6 @@ DWSIM_DATA = [
         "T_dew": row["T_dew_K"]
     }
     for row in raw["data"]
-]
-# Literature bubble temperatures (Chu et al., 1950)
-LIT_DATA = [
-    (0.000, 373.15), (0.019, 371.15), (0.072, 369.15),
-    (0.097, 367.65), (0.124, 366.45), (0.166, 365.15),
-    (0.234, 363.45), (0.261, 362.95), (0.327, 361.85),
-    (0.397, 361.15), (0.508, 359.95), (0.520, 359.85),
-    (0.573, 359.35), (0.676, 358.85), (0.747, 358.65),
-    (0.894, 358.35), (1.000, 351.45),
 ]
 
 def K_to_C(T): return T - 273.15
@@ -87,10 +78,6 @@ ax_main.grid(which="minor", color="#162840", linewidth=0.4, linestyle=":", alpha
 ax_main.xaxis.set_minor_locator(MultipleLocator(0.05))
 ax_main.yaxis.set_minor_locator(MultipleLocator(1))
 
-# Literature scatter
-ax_main.scatter(x_lit, T_lit_C, s=55, color="#FFD54F", marker="^",
-                zorder=6, label="Literature — Chu et al. (1950)",
-                edgecolors="#FFA000", linewidth=0.8)
 
 # Dew curve
 ax_main.plot(x_sim, T_dew_C, color="#EF5350", linewidth=2.2,
