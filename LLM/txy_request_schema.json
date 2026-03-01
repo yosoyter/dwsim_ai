@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Txy_Calculation_Request",
+  "type": "object",
+  "description": "Structured parameters for a binary Txy phase envelope calculation in DWSIM.",
+  "properties": {
+    "component_1": {
+      "type": "string",
+      "description": "The name of the first chemical component (e.g., 'Water', 'Ethanol'). Must match DWSIM compound database names."
+    },
+    "component_2": {
+      "type": "string",
+      "description": "The name of the second chemical component (e.g., 'Methanol', 'Benzene')."
+    },
+    "pressure_Pa": {
+      "type": "number",
+      "description": "The system pressure in Pascals. If the user specifies atm or bar, convert it to Pascals. Default to 101325 if unspecified."
+    },
+    "property_package": {
+      "type": "string",
+      "enum": ["NRTL", "Peng-Robinson", "UNIFAC", "Raoults_Law"],
+      "description": "The thermodynamic property package to use. Use NRTL or UNIFAC for polar mixtures, Peng-Robinson for hydrocarbons."
+    }
+  },
+  "required": ["component_1", "component_2", "pressure_Pa", "property_package"],
+  "additionalProperties": false
+}
