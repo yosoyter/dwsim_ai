@@ -1,0 +1,5 @@
+# Group 1 - LLM Orchestrator Dependencies
+# Install with: pip install -r requirements.txt
+
+anthropic>=0.25.0      # Anthropic API client for Claude
+jsonschema>=4.0.0      # JSON schema validation
