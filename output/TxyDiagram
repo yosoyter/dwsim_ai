@@ -6,7 +6,7 @@ import matplotlib.gridspec as gridspec
 from matplotlib.ticker import MultipleLocator
 import numpy as np
 
-# ── Data ─────────────────────────────────────────────────────────────────────
+# --- Step 1: Import Data ---
 
 import json
 # this may be needed if txy_results.json is in a different folder
@@ -32,7 +32,7 @@ DWSIM_DATA = [
 
 def K_to_C(T): return T - 273.15
 
-# ── Extract arrays ────────────────────────────────────────────────────────────
+# --- Step 2: Extract arrays ---
 x_sim   = np.array([d["x"]     for d in DWSIM_DATA])
 T_bub_C = np.array([K_to_C(d["T_bub"]) for d in DWSIM_DATA])
 T_dew_C = np.array([K_to_C(d["T_dew"]) for d in DWSIM_DATA])
@@ -45,7 +45,7 @@ c2  = METADATA["component_2"]
 P   = METADATA["pressure_Pa"]
 pkg = METADATA["property_package"]
 
-# ── Figure layout: main plot + residual panel ─────────────────────────────────
+# --- Step 3: Figure layout: main plot + residual panel ---
 fig = plt.figure(figsize=(11, 8.5))
 fig.patch.set_facecolor("#0D1B2A")
 
@@ -60,7 +60,7 @@ for ax in [ax_main, ax_res]:
         spine.set_edgecolor("#2A4A6A")
         spine.set_linewidth(1.2)
 
-# ── MAIN PANEL ────────────────────────────────────────────────────────────────
+# --- Step 4: MAIN PANEL ---
 
 # Smooth interpolation for filled region
 x_fill = np.linspace(0, 1, 300)
@@ -152,7 +152,7 @@ fig.suptitle(
     fontfamily="monospace"
 )
 
-# ── RESIDUAL PANEL (DWSIM bubble − Literature) ────────────────────────────────
+# --- Step 5: RESIDUAL PANEL (DWSIM bubble ) ---
 # Interpolate DWSIM bubble onto literature x-points
 T_bub_at_lit_x = np.interp(x_lit, x_sim, T_bub_C)
 residuals = T_bub_at_lit_x - T_lit_C
@@ -180,7 +180,7 @@ ax_res.text(0.50, -3.2,
             "Residual = DWSIM bubble − Literature (Chu et al. 1950)",
             fontsize=7.5, color="#78909C", ha="center", style="italic")
 
-# ── Save ──────────────────────────────────────────────────────────────────────
+# --- Step 6: Save ---
 OUT = "txy_plot_revised.png"
 plt.savefig(OUT, dpi=180, bbox_inches="tight", facecolor=fig.get_facecolor())
 plt.close()
