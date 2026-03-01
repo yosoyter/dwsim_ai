@@ -9,7 +9,9 @@ import numpy as np
 
 # --- Step 1: Import Data ---
 import json
+
 # this may be needed if txy_results.json is in a different folder
+# with necessary substitutions to filepath using your system username in place of YOUR_USERNAME
 # with open(r"C:\Users\YOUR_USERNAME\Desktop\txy_results.json", "r") as f:
 #    raw = json.load(f)
 
@@ -174,12 +176,6 @@ ax_res.yaxis.set_minor_locator(MultipleLocator(0.5))
 ax_res.grid(which="major", color="#1E3A5A", linewidth=0.6,
             linestyle="--", alpha=0.7)
 
-# Residual panel annotation
-ax_res.text(0.01, 2.5, "± 2 K tolerance", fontsize=7.5,
-            color="#EF5350", alpha=0.7, style="italic", fontfamily="monospace")
-ax_res.text(0.50, -3.2,
-            "Residual = DWSIM bubble − Literature (Chu et al. 1950)",
-            fontsize=7.5, color="#78909C", ha="center", style="italic")
 
 # --- Step 6: Save ---
 OUT = "txy_plot_revised.png"
