@@ -15,7 +15,7 @@ import os
 # ─────────────────────────────────────────────────────────────────────────────
 #  CONFIGURATION  — edit DWSIM_PATH to match your workstation install location
 # ─────────────────────────────────────────────────────────────────────────────
-DWSIM_PATH = r"C:\Users\Public\DWSIM"   # default Windows install
+DWSIM_PATH = r"C:\\Users\\rickyyu\\AppData\\Local\\DWSIM\\"   # default Windows install
 
 # Property package display names as DWSIM registers them internally
 PROPERTY_PACKAGES = {
