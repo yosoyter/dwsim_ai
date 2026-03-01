@@ -1,0 +1,184 @@
+# T-x-y Diagram Generator
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.gridspec as gridspec
+from matplotlib.ticker import MultipleLocator
+import numpy as np
+
+# --- Step 1: Import Data ---
+import json
+
+# this may be needed if txy_results.json is in a different folder
+# with necessary substitutions to filepath using your system username in place of YOUR_USERNAME
+# with open(r"C:\Users\YOUR_USERNAME\Desktop\txy_results.json", "r") as f:
+#    raw = json.load(f)
+
+with open("txy_results.json", "r") as f:
+    raw = json.load(f)
+
+METADATA = raw["metadata"]
+
+c1 = METADATA["component_1"]
+c2 = METADATA["component_2"]
+
+DWSIM_DATA = [
+    {
+        "x":     row[f"x_{c1}"],
+        "T_bub": row["T_bubble_K"],
+        "T_dew": row["T_dew_K"]
+    }
+    for row in raw["data"]
+]
+
+def K_to_C(T): return T - 273.15
+
+# --- Step 2: Extract arrays ---
+x_sim   = np.array([d["x"]     for d in DWSIM_DATA])
+T_bub_C = np.array([K_to_C(d["T_bub"]) for d in DWSIM_DATA])
+T_dew_C = np.array([K_to_C(d["T_dew"]) for d in DWSIM_DATA])
+
+x_lit   = np.array([r[0] for r in LIT_DATA])
+T_lit_C = np.array([K_to_C(r[1]) for r in LIT_DATA])
+
+c1  = METADATA["component_1"]
+c2  = METADATA["component_2"]
+P   = METADATA["pressure_Pa"]
+pkg = METADATA["property_package"]
+
+# --- Step 3: Figure layout: main plot + residual panel ---
+fig = plt.figure(figsize=(11, 8.5))
+fig.patch.set_facecolor("#0D1B2A")
+
+gs = gridspec.GridSpec(2, 1, height_ratios=[4, 1], hspace=0.08,
+                       left=0.09, right=0.95, top=0.91, bottom=0.09)
+ax_main = fig.add_subplot(gs[0])
+
+for ax in [ax_main]:
+    ax.set_facecolor("#111D2B")
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#2A4A6A")
+        spine.set_linewidth(1.2)
+
+# --- Step 4: MAIN PANEL ---
+
+# Smooth interpolation for filled region
+x_fill = np.linspace(0, 1, 300)
+T_bub_interp = np.interp(x_fill, x_sim, T_bub_C)
+T_dew_interp = np.interp(x_fill, x_sim, T_dew_C)
+
+# Two-phase region gradient fill
+ax_main.fill_between(x_fill, T_bub_interp, T_dew_interp,
+                     alpha=0.18, color="#4FC3F7",
+                     label="Two-phase envelope")
+
+# Subtle grid
+ax_main.grid(which="major", color="#1E3A5A", linewidth=0.7, linestyle="--", alpha=0.8)
+ax_main.grid(which="minor", color="#162840", linewidth=0.4, linestyle=":", alpha=0.5)
+ax_main.xaxis.set_minor_locator(MultipleLocator(0.05))
+ax_main.yaxis.set_minor_locator(MultipleLocator(1))
+
+
+# Dew curve
+ax_main.plot(x_sim, T_dew_C, color="#EF5350", linewidth=2.2,
+             linestyle="--", marker="s", markersize=5.5,
+             markerfacecolor="#EF5350", markeredgecolor="#FFFFFF",
+             markeredgewidth=0.6, zorder=5,
+             label=f"Dew curve — DWSIM ({pkg})")
+
+# Bubble curve
+ax_main.plot(x_sim, T_bub_C, color="#42A5F5", linewidth=2.5,
+             marker="o", markersize=6,
+             markerfacecolor="#42A5F5", markeredgecolor="#FFFFFF",
+             markeredgewidth=0.6, zorder=5,
+             label=f"Bubble curve — DWSIM ({pkg})")
+
+# Azeotrope marker
+az_x, az_T = 0.894, K_to_C(351.30)
+ax_main.axvline(az_x, color="#B0BEC5", linewidth=1.0,
+                linestyle=":", alpha=0.6, zorder=3)
+ax_main.scatter([az_x], [az_T], s=120, color="#FFEB3B", zorder=7,
+                marker="*", edgecolors="#F57F17", linewidth=0.8)
+ax_main.annotate(
+    f"Azeotrope\nx = {az_x},  T = {az_T:.1f} °C",
+    xy=(az_x, az_T), xytext=(0.60, 80.0),
+    fontsize=8.5, color="#FFEE58",
+    fontfamily="monospace",
+    arrowprops=dict(arrowstyle="->", color="#FFEE58",
+                    connectionstyle="arc3,rad=0.2", lw=1.1),
+    bbox=dict(boxstyle="round,pad=0.3", facecolor="#1A2F45",
+              edgecolor="#FFEE58", alpha=0.85)
+)
+
+# Pure component boiling points
+for xp, Tp, label, ha in [(0.0, K_to_C(373.15), f"BP {c2}\n100.0 °C", "center"),
+                           (1.0, K_to_C(351.45), f"BP {c1}\n78.3 °C", "right")]:
+    ax_main.scatter([xp], [Tp], s=70, color="#A5D6A7", zorder=7,
+                    marker="D", edgecolors="#FFFFFF", linewidth=0.7)
+    ax_main.annotate(label, xy=(xp, Tp),
+                     xytext=(xp + (0.04 if ha == "left" else -0.04), Tp + 2.5),
+                     fontsize=7.5, color="#A5D6A7", ha=ha,
+                     fontfamily="monospace")
+
+# Region labels
+ax_main.text(0.12, 75.0, "SUBCOOLED\nLIQUID",
+             fontsize=8, color="#90CAF9", alpha=0.55,
+             fontweight="bold", ha="center", style="italic")
+ax_main.text(0.50, 94.0, "SUPERHEATED\nVAPOUR",
+             fontsize=8, color="#EF9A9A", alpha=0.55,
+             fontweight="bold", ha="center", style="italic")
+ax_main.text(0.40, 83.5, "L + V",
+             fontsize=9, color="#B0BEC5", alpha=0.6,
+             fontweight="bold", ha="center")
+
+# Axes
+ax_main.set_ylabel("Temperature (°C)", color="#CFD8DC",
+                   fontsize=11, labelpad=8)
+ax_main.set_xlabel("Mole Fraction of Ethanol", color='#CFD8DC',
+                   fontsize=11, labelpad=8)
+ax_main.tick_params(axis="both", colors="#90A4AE", labelsize=9)
+ax_main.set_xlim(-0.02, 1.02)
+ax_main.set_ylim(K_to_C(349), K_to_C(376))
+plt.setp(ax_main.get_xticklabels(), visible=False)
+
+# Legend
+legend = ax_main.legend(fontsize=8.5, loc="upper right",
+                         facecolor="#0D1B2A", edgecolor="#2A4A6A",
+                         labelcolor="#CFD8DC", framealpha=0.92)
+
+# Title
+fig.suptitle(
+    f"T-x-y Phase Diagram:  {c1}  /  {c2}\n"
+    f"P = {P/1e5:.5f} bar   |   Property Package: {pkg}   |   Source: DWSIM Automation",
+    color="#ECEFF1", fontsize=12.5, fontweight="bold", y=0.97,
+    fontfamily="monospace"
+)
+
+# --- Step 5: RESIDUAL PANEL (DWSIM bubble ) ---
+# Interpolate DWSIM bubble onto literature x-points
+T_bub_at_lit_x = np.interp(x_lit, x_sim, T_bub_C)
+residuals = T_bub_at_lit_x - T_lit_C
+
+colors_res = ["#EF5350" if abs(r) > 1.5 else "#42A5F5" for r in residuals]
+ax_res.bar(x_lit, residuals, width=0.025, color=colors_res,
+           alpha=0.85, edgecolor="#0D1B2A", linewidth=0.5)
+ax_res.axhline(0, color="#B0BEC5", linewidth=1.0, linestyle="-")
+ax_res.axhline(2,  color="#EF5350", linewidth=0.8, linestyle="--", alpha=0.5)
+ax_res.axhline(-2, color="#EF5350", linewidth=0.8, linestyle="--", alpha=0.5)
+
+ax_res.set_ylabel("Δ T (K)", color="#CFD8DC", fontsize=9, labelpad=6)
+ax_res.set_xlabel(f"Mole fraction  {c1}  (x, y)", color="#CFD8DC",
+                  fontsize=11, labelpad=8)
+ax_res.tick_params(axis="both", colors="#90A4AE", labelsize=8.5)
+ax_res.set_ylim(-4, 4)
+ax_res.yaxis.set_minor_locator(MultipleLocator(0.5))
+ax_res.grid(which="major", color="#1E3A5A", linewidth=0.6,
+            linestyle="--", alpha=0.7)
+
+
+# --- Step 6: Save ---
+OUT = "txy_plot_revised.png"
+plt.savefig(OUT, dpi=180, bbox_inches="tight", facecolor=fig.get_facecolor())
+plt.close()
+print(f"Saved → {OUT}")
