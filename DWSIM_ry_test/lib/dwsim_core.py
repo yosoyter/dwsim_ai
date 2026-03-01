@@ -1,57 +1,30 @@
 """
-DWSIM/lib/dwsim_core.py
-========================
-Reusable DWSIM automation helpers for headless (no-GUI) operation.
-
-Requirements: Python 3.9, pythonnet==2.5.2, DWSIM installed on workstation.
-Activate correct env before use:  bash setup_env.sh  (takes ~3-4 min on remote)
-
-All functions here are stateless helpers — call them from any task script.
+DWSIM_ry_test/lib/dwsim_core.py
+================================
+Reusable DWSIM automation helpers - headless mode.
+Based on working Automation3 API pattern (matches DWSim_proof_of_concept.py).
+Requires: Python 3.9, pythonnet, pythoncom, DWSIM installed.
 """
 
-import sys
 import os
+import sys
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  CONFIGURATION  — edit DWSIM_PATH to match your workstation install location
+#  CONFIGURATION — update this if DWSIM moves
 # ─────────────────────────────────────────────────────────────────────────────
-DWSIM_PATH = r"C:\\Users\\rickyyu\\AppData\\Local\\DWSIM\\"   # default Windows install
+DWSIM_PATH = r"C:\\Users\\rickyyu\AppData\\Local\\DWSIM\\"
 
-# Property package display names as DWSIM registers them internally
-PROPERTY_PACKAGES = {
-    "NRTL":    "Raoult's Law / NRTL",
-    "UNIQUAC": "UNIQUAC",
-    "PR":      "Peng-Robinson (PR)",
-    "SRK":     "Soave-Redlich-Kwong (SRK)",
-    "IDEAL":   "Raoult's Law",
-}
-
-# Components known to be polar — used for auto property package selection
 POLAR_COMPONENTS = {
     "WATER", "ETHANOL", "METHANOL", "ACETONE", "ACETIC ACID",
-    "ISOPROPANOL", "1-PROPANOL", "N-PROPANOL", "FORMIC ACID",
-    "ETHYLENE GLYCOL", "DIETHYL ETHER",
+    "ISOPROPANOL", "1-PROPANOL", "N-PROPANOL",
 }
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  HELPER: AUTO PROPERTY PACKAGE SELECTION
-# ─────────────────────────────────────────────────────────────────────────────
 
 def get_recommended_package(comp1: str, comp2: str) -> str:
     """
-    Heuristic: return the best property package tag for a binary pair.
-
-    - Any polar component → NRTL  (activity coefficient; handles non-ideal liquids)
-    - Both non-polar      → PR    (equation of state; good for hydrocarbons)
-
-    Parameters
-    ----------
-    comp1, comp2 : str  component names (case-insensitive)
-
-    Returns
-    -------
-    str  property package key from PROPERTY_PACKAGES dict
+    Auto-select property package based on component polarity.
+    Polar pair  → NRTL  (activity coefficient; handles non-ideal liquids)
+    Non-polar   → PR    (equation of state; good for hydrocarbons)
     """
     if {comp1.upper(), comp2.upper()} & POLAR_COMPONENTS:
         return "NRTL"
@@ -59,14 +32,18 @@ def get_recommended_package(comp1: str, comp2: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  DWSIM INITIALIZATION
+#  INITIALIZATION
 # ─────────────────────────────────────────────────────────────────────────────
 
 def init_dwsim(dwsim_path: str = DWSIM_PATH):
     """
-    Load DWSIM .NET assemblies into Python via pythonnet (clr).
+    Initialize DWSIM via the Automation3 API (headless, no GUI).
 
-    Must be called ONCE per session before any other DWSIM operations.
+    This mirrors the pattern in DWSim_proof_of_concept.py exactly:
+      - CoInitialize first
+      - Load all DLLs by full path
+      - SetCurrentDirectory to DWSIM folder
+      - Return Automation3 instance
 
     Parameters
     ----------
@@ -74,183 +51,191 @@ def init_dwsim(dwsim_path: str = DWSIM_PATH):
 
     Returns
     -------
-    interf : DWSIM.Interfaces module
-
-    Raises
-    ------
-    ImportError   if pythonnet/clr is not installed
-    RuntimeError  if DWSIM DLLs are not found at dwsim_path
+    interf : Automation3 instance  (use this to create/solve/save flowsheets)
     """
-    try:
-        import clr
-    except ImportError:
-        raise ImportError(
-            "pythonnet (clr) not found.\n"
-            "  1. Activate the conda env:  bash setup_env.sh\n"
-            "  2. Run:  pip install pythonnet==2.5.2"
-        )
+    # MUST be first — avoids STA threading errors on Windows
+    import pythoncom
+    pythoncom.CoInitialize()
+
+    import clr
+    from System.IO import Directory
 
     if not os.path.isdir(dwsim_path):
         raise RuntimeError(
             f"DWSIM path not found: {dwsim_path}\n"
-            "Edit DWSIM_PATH in DWSIM/lib/dwsim_core.py to point to your install."
+            "Update DWSIM_PATH in DWSIM_ry_test/lib/dwsim_core.py"
         )
 
-    sys.path.append(dwsim_path)
-
-    assemblies = [
-        "DWSIM.Interfaces",
-        "DWSIM.GlobalSettings",
-        "DWSIM.SharedClasses",
-        "DWSIM.Thermodynamics",
-        "DWSIM.UnitOperations",
-        "DWSIM.Inspector",
-        "System",
+    # Load all required DLLs with full absolute path
+    required_dlls = [
+        "CapeOpen.dll",
+        "DWSIM.Automation.dll",
+        "DWSIM.Interfaces.dll",
+        "DWSIM.GlobalSettings.dll",
+        "DWSIM.SharedClasses.dll",
+        "DWSIM.Thermodynamics.dll",
+        "DWSIM.Thermodynamics.ThermoC.dll",
+        "DWSIM.UnitOperations.dll",
+        "DWSIM.Inspector.dll",
+        "System.Buffers.dll",
     ]
-    for asm in assemblies:
-        clr.AddReference(asm)
+    for dll in required_dlls:
+        dll_full = os.path.join(dwsim_path, dll)
+        if os.path.isfile(dll_full):
+            clr.AddReference(dll_full)
+        else:
+            print(f"[dwsim_core] WARNING: DLL not found, skipping: {dll}")
 
-    import DWSIM.GlobalSettings  # noqa: F401
-    import DWSIM.Interfaces as interf
+    # Required for DWSIM to find its internal resources
+    Directory.SetCurrentDirectory(dwsim_path)
 
-    print(f"[dwsim_core] DWSIM assemblies loaded from: {dwsim_path}")
+    from DWSIM.Automation import Automation3
+    interf = Automation3()
+
+    print(f"[dwsim_core] DWSIM loaded from: {dwsim_path}")
     return interf
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  FLOWSHEET CREATION
+#  FLOWSHEET
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_flowsheet(interf):
     """
-    Create and return an empty headless DWSIM flowsheet.
+    Create and return a blank DWSIM flowsheet.
 
     Parameters
     ----------
-    interf : module  returned by init_dwsim()
+    interf : Automation3 instance returned by init_dwsim()
 
     Returns
     -------
-    flowsheet : DWSIM.Interfaces.Flowsheet.FlowsheetObject
+    sim : DWSIM flowsheet object
     """
-    flowsheet = interf.Flowsheet.FlowsheetObject()
-    flowsheet.Initialize()
-    print("[dwsim_core] Empty flowsheet created.")
-    return flowsheet
+    sim = interf.CreateFlowsheet()
+    print("[dwsim_core] Flowsheet created.")
+    return sim
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  COMPONENTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+def add_component(sim, component_name: str):
+    """
+    Add a pure compound to the flowsheet's compound list.
+
+    Parameters
+    ----------
+    sim            : DWSIM flowsheet object
+    component_name : str  must match DWSIM compound database name exactly
+                         e.g. 'Ethanol', 'Water', 'Benzene', 'Toluene'
+
+    Raises
+    ------
+    RuntimeError if the component name is not found in DWSIM database
+    """
+    try:
+        compound = sim.AvailableCompounds[component_name]
+        sim.SelectedCompounds.Add(compound.Name, compound)
+        print(f"[dwsim_core] Added component: {component_name}")
+    except Exception as e:
+        raise RuntimeError(
+            f"Could not add component '{component_name}'.\n"
+            "Check that the name matches the DWSIM compound database exactly.\n"
+            f"Original error: {e}"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  PROPERTY PACKAGE
 # ─────────────────────────────────────────────────────────────────────────────
 
-def select_property_package(flowsheet, package_tag: str):
+def select_property_package(sim, package_tag: str):
     """
-    Attach a property package to the flowsheet by tag name.
+    Instantiate and attach a property package to the flowsheet.
 
     Parameters
     ----------
-    flowsheet   : DWSIM flowsheet object
-    package_tag : str  key from PROPERTY_PACKAGES (e.g. 'NRTL', 'PR')
+    sim         : DWSIM flowsheet object
+    package_tag : str  one of: NRTL, PR, SRK, UNIQUAC, IDEAL, STEAM
 
     Returns
     -------
-    pp : property package object
+    pp : property package object attached to sim
 
     Raises
     ------
-    ValueError   if package_tag is not in PROPERTY_PACKAGES
-    RuntimeError if DWSIM can't find the package in its registry
+    ValueError if package_tag is not recognized
     """
-    if package_tag not in PROPERTY_PACKAGES:
+    from DWSIM.Thermodynamics import PropertyPackages
+
+    pp_map = {
+        "NRTL":    PropertyPackages.NRTLPropertyPackage,
+        "PR":      PropertyPackages.PengRobinsonPropertyPackage,
+        "SRK":     PropertyPackages.SRKPropertyPackage,
+        "UNIQUAC": PropertyPackages.UNIQUACPropertyPackage,
+        "IDEAL":   PropertyPackages.RaoultPropertyPackage,
+        "STEAM":   PropertyPackages.SteamTablesPropertyPackage,
+    }
+
+    if package_tag not in pp_map:
         raise ValueError(
             f"Unknown property package tag: '{package_tag}'\n"
-            f"Valid options: {list(PROPERTY_PACKAGES.keys())}"
+            f"Valid options: {list(pp_map.keys())}"
         )
 
-    display_name = PROPERTY_PACKAGES[package_tag]
-
-    pp = None
-    for available_pp in flowsheet.AvailablePropertyPackages:
-        if available_pp.Name == display_name:
-            pp = available_pp
-            break
-
-    if pp is None:
-        raise RuntimeError(
-            f"Property package '{display_name}' not found in DWSIM.\n"
-            "Check that the NRTL / PR packages are installed."
-        )
-
-    flowsheet.SelectedPropertyPackage = pp
-    print(f"[dwsim_core] Property package set: {display_name}")
+    pp = pp_map[package_tag]()
+    sim.AddPropertyPackage(pp)
+    print(f"[dwsim_core] Property package set: {package_tag}")
     return pp
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  COMPONENT MANAGEMENT
-# ─────────────────────────────────────────────────────────────────────────────
-
-def add_component(flowsheet, component_name: str):
-    """
-    Add a pure component to the flowsheet's compound list.
-
-    Parameters
-    ----------
-    flowsheet      : DWSIM flowsheet object
-    component_name : str  must match DWSIM compound database name exactly
-                         (e.g. 'Ethanol', 'Water', 'Benzene')
-
-    Raises
-    ------
-    RuntimeError if component is not found in the DWSIM database
-    """
-    try:
-        flowsheet.SelectedCompounds.Add(component_name)
-        print(f"[dwsim_core] Added component: {component_name}")
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to add component '{component_name}'.\n"
-            "Verify the name matches DWSIM's compound database exactly.\n"
-            f"Original error: {e}"
-        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  SOLVER
 # ─────────────────────────────────────────────────────────────────────────────
 
-def solve_flowsheet(flowsheet) -> list:
+def solve_flowsheet(interf, sim) -> list:
     """
-    Run DWSIM's sequential-modular solver.
+    Run DWSIM's flowsheet solver synchronously.
+
+    Parameters
+    ----------
+    interf : Automation3 instance
+    sim    : DWSIM flowsheet object
 
     Returns
     -------
     errors : list[str]  solver error messages (empty list = success)
     """
-    from DWSIM.FlowsheetSolver import FlowsheetSolver
-    solver = FlowsheetSolver()
-    errors = []
-    try:
-        solver.SolveFlowsheet(flowsheet)
-        print("[dwsim_core] Flowsheet solved successfully.")
-    except Exception as e:
-        errors.append(str(e))
-        print(f"[dwsim_core] Solver error: {e}")
-    return errors
+    from DWSIM.GlobalSettings import Settings
+    Settings.SolverMode = 0  # 0 = synchronous
+
+    errors = interf.CalculateFlowsheet2(sim)
+
+    if errors is not None and errors.Count > 0:
+        err_list = [str(e) for e in errors]
+        print(f"[dwsim_core] Solver errors: {err_list}")
+        return err_list
+
+    print("[dwsim_core] Flowsheet solved successfully.")
+    return []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  FILE I/O
 # ─────────────────────────────────────────────────────────────────────────────
 
-def save_flowsheet(flowsheet, output_path: str):
+def save_flowsheet(interf, sim, output_path: str):
     """
-    Save flowsheet as a .dwxmz file.
+    Save flowsheet as a compressed .dwxmz file.
 
     Parameters
     ----------
+    interf      : Automation3 instance
+    sim         : DWSIM flowsheet object
     output_path : str  full path including filename (e.g. 'output/txy_run.dwxmz')
     """
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    flowsheet.SaveToXML(output_path)
-    print(f"[dwsim_core] Flowsheet saved: {output_path}")
+    interf.SaveFlowsheet(sim, output_path, True)  # True = compressed
+    print(f"[dwsim_core] Saved: {output_path}")
