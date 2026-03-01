@@ -1,1 +1,55 @@
+""""""""""""""""
+Key Assumptions:
+""""""""""""""""
+  Thermodynamic Assumptions:
+    - Phase equalibrium is modeled as VLE
+    - Fixed pressure: isobaric T-x-y
+    - Bubble-point calculation sets vapor fraction to exactly 0.0; dew point calculation sets it to exactly 1.0.
+      Intermediate flash fractions are not calculated.
+    - DWSIM internally utilizes specified property package for all activity/ fugacity coefficient calculations. No manual
+      interaction parameters are verified.
+
+  LLM Assumptions:
+    - LLM can correctly identify two components and map them to DWSIM compound database names.
+    - Pressure conversion is specified to be in Pascals in JSON payload, however conversion from other metrics is not
+      independently verified.
+    - Limited property package field scope, as only NRTL, Peng-Robinson, UNIFAC, Raoults_Law, and SteamTables.
+
+""""""""""""
+Limitations:
+""""""""""""
+  Property Package Incompatibility:
+    - Critical failure occurs when the LLM selects an incompatible property package for the specified mixture type such as:
+        - Divergent results for high pressure binary mixtures when using Raoult's Law
+        - COM exceptions due to SteamTables requiring single-component water stream
+        - DWSIM defaulting to zero interaction params when NRTL is used in place of Peng-Robinson for ideal hydrocarbons
+
+  DWSIM Compound Database:
+    - DWSIM's compound database contains a set amount of substances, leaving out many exotic or polymeric species.
+    - Compound names are case-sensitive and must match exactly
+
+  Environment:
+    - This code requires a Windows environment with DWSIM installed. It cannot run natively on macOS or Linux due to the COM/CLR dependency.
+      We found a Parallels VM functioned as a workaround for macOS.
+    - Installation path is hard-coded in, with adjustments to code being necessary when implemented on new devices.
+
+"""""""""""""""""""
+Fallback Behaviors:
+"""""""""""""""""""
+  JSON Schema validation Failure:
+    - If the LLM output does not conform to txy_request_schema.json, it should
+      1. Catch the ValidationError in the calling code.
+      2. Log the failed field and error message to a structured error log.
+      3. Return a user-readable message identifying which field failed and why.
+      4. NOT attempt to call DWSIMWrapper with the failed field error.
+
+  Flash Calculation Failures:
+    - If calculate_Txy_point() returns a temperature indicating convergence failure (=< 100K or NaN value):
+      1. Flag the data point as invalid in the output JSON.
+      2. Continue sweep; do not abort due to one failed point.
+      3. In Excel report, highlight invalid rows in red with 'CONVERGENCE FAIL' displayed in status column.
+      4. In the T-x-y plot, omit invalid point.
+
+  Incompatible Property Package:
+    - Needs further development
 
