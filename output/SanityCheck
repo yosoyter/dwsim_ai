@@ -1,0 +1,42 @@
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+Sanity Check for 100kg/s water stream heating from 300 - 400K (vaporisation and superheated vapor):
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Mass Flow: 100kg/s
+Inlet Temp (T1) = 300K (26.85C)
+Outlet Temp (T2) = 400K (126.85C)
+Pressure (P) = 101325 Pa (1 atm)
+
+Boiling Point of water is 375.15K (100C) we know this stream will undergo a phase-change
+
+Step 1: Heating to BP
+
+(according to steam tables)
+h1(liq, 300K) = 112.6 kJ/kg
+h2(sat. liq, 373.15K) = 419.1 kJ/kg
+
+Δh1 = 419.1 - 112.6 = 306.5 kJ/kg
+
+Step 2: Vaporisation
+
+hg(373.15K, 101325 Pa) = 2256.7 kJ/kg = Δh2
+
+Step 3: Superheating vapor
+
+h3(sat. vap, 373.15K) = 2675.7 kJ/kg
+h4(sup. vap, 400K) = 2728.6 kJ/kg
+
+Δh3 = 2728.6 - 2675.7 = 52.9 kJ/kg
+
+Step 4: Heat Duty
+
+Δhtot = Δh1 + Δh 2 + Δh3 = 2616.1 kJ/kg
+
+Q = mass flow * Δhtot = 100 kg/s * 2616.1 kJ/kg = 261,610 kW 
+
+Step 5: Validating DWSIM:
+
+DWSIM Heat Duty = 261,760 kW
+
+Error = 0.0006 which is considered an insignificant difference, showing DWSIM calculations fall in line with expected values from
+steam table calculations
