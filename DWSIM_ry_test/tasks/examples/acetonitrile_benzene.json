@@ -1,0 +1,8 @@
+{
+  "task_type": "txy",
+  "component_1": "Acetonitrile",
+  "component_2": "Benzene",
+  "pressure_Pa": 66661.18,
+  "n_points": 20,
+  "property_package": "NRTL"
+}

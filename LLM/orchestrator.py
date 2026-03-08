@@ -4,10 +4,9 @@
 #
 # What this script does:
 #   1. Takes a natural language user question as input
-#   2. Sends it to the LLM with a strict system prompt
+#   2. Sends it to the Claude API with a strict system prompt
 #   3. Parses the LLM's JSON response
-#   4. Validates it against the Txy schema
-#   5. Prints the clean JSON payload ready for Group 2
+#   4. Saves a JSON file in Group 2's exact format to the examples/ folder
 #
 # Usage:
 #   python orchestrator.py
@@ -15,159 +14,161 @@
 #
 # Requirements:
 #   pip install anthropic jsonschema
-#   Set your API key: set ANTHROPIC_API_KEY=your_key_here  (Windows)
-#                  or export ANTHROPIC_API_KEY=your_key_here (Mac/Linux)
+#   Set your API key: export ANTHROPIC_API_KEY=your_key_here
 # =============================================================================
 
 import os
 import json
+import re
 import anthropic
-import jsonschema
 
 # =============================================================================
-# STEP 1: Load the system prompt
+# CONFIGURATION
 # =============================================================================
 
-# Read the system prompt from the text file (keeps things modular and editable)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SYSTEM_PROMPT_PATH = os.path.join(SCRIPT_DIR, "system_prompt.txt")
-SCHEMA_PATH = os.path.join(SCRIPT_DIR, "schema.json")
+
+# This is where Group 2's txy_engine.py looks for input files
+OUTPUT_EXAMPLES_DIR = os.path.join(SCRIPT_DIR, "..", "DWSIM_ry_test", "tasks", "examples")
 
 with open(SYSTEM_PROMPT_PATH, "r") as f:
     SYSTEM_PROMPT = f.read()
 
-with open(SCHEMA_PATH, "r") as f:
-    TXY_SCHEMA = json.load(f)
-
 # =============================================================================
-# STEP 2: Define the LLM call function
+# STEP 1: Call the LLM and get back a structured JSON task
 # =============================================================================
 
 def call_llm(user_question: str) -> dict:
     """
-    Sends the user's question to Claude and returns the parsed JSON payload.
-
-    Args:
-        user_question: Natural language question from the user.
-
-    Returns:
-        Parsed JSON dict if successful.
-
-    Raises:
-        ValueError: If the LLM response cannot be parsed as JSON.
+    Sends the user's question to Claude.
+    Returns a parsed dict in Group 2's exact task format.
     """
-    # Initialize the Anthropic client
-    # It automatically reads ANTHROPIC_API_KEY from environment variables
     client = anthropic.Anthropic()
 
-    print(f"\n[LLM] Sending request to Claude...")
+    print(f"\n[LLM] Sending to Claude...")
 
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",   # Use the latest capable model
-        max_tokens=512,                      # JSON payload is small, 512 is plenty
+        model="claude-sonnet-4-20250514",
+        max_tokens=512,
         system=SYSTEM_PROMPT,
         messages=[
             {"role": "user", "content": user_question}
         ]
     )
 
-    # Extract the raw text response
     raw_text = response.content[0].text.strip()
-    print(f"[LLM] Raw response received:\n    {raw_text}\n")
+    print(f"[LLM] Raw response:\n    {raw_text}\n")
 
-    # Parse the JSON — if the LLM followed instructions, this will work cleanly
+    # Strip markdown code fences if the LLM added them
+    raw_text = re.sub(r"```json|```", "", raw_text).strip()
+
     try:
         parsed = json.loads(raw_text)
     except json.JSONDecodeError as e:
         raise ValueError(
             f"LLM did not return valid JSON.\n"
             f"Raw response: {raw_text}\n"
-            f"JSON error: {e}"
+            f"Error: {e}"
         )
 
     return parsed
 
+# =============================================================================
+# STEP 2: Validate the payload has everything Group 2 needs
+# =============================================================================
 
-# =============================================================================
-# STEP 3: Validate the parsed JSON against the schema
-# =============================================================================
+REQUIRED_FIELDS = ["task_type", "component_1", "component_2", "pressure_Pa", "n_points", "property_package"]
 
 def validate_payload(payload: dict) -> bool:
     """
-    Validates the parsed JSON against the Txy schema.
-
-    Returns True if valid, prints errors and returns False if invalid.
+    Checks the payload has all required fields in Group 2's format.
+    Returns True if valid, False otherwise.
     """
-    # Check for an "error" key first — means LLM flagged incomplete input
     if "error" in payload:
         print(f"[VALIDATION] LLM flagged an issue: {payload['error']}")
         return False
 
-    try:
-        jsonschema.validate(instance=payload, schema=TXY_SCHEMA)
-        print("[VALIDATION] Payload is valid. ✓")
-        return True
-    except jsonschema.ValidationError as e:
-        print(f"[VALIDATION] Schema validation failed: {e.message}")
+    missing = [f for f in REQUIRED_FIELDS if f not in payload]
+    if missing:
+        print(f"[VALIDATION] Missing required fields: {missing}")
         return False
 
+    if payload.get("task_type") != "txy":
+        print(f"[VALIDATION] task_type must be 'txy', got: {payload.get('task_type')}")
+        return False
+
+    print("[VALIDATION] Payload is valid. ✓")
+    return True
 
 # =============================================================================
-# STEP 4: Main pipeline
+# STEP 3: Save the JSON file where Group 2 can find it
 # =============================================================================
 
-def run_pipeline(user_question: str) -> dict | None:
+def save_payload(payload: dict) -> str:
     """
-    Full Group 1 pipeline: question → LLM → validated JSON payload.
+    Saves the validated payload as a JSON file in Group 2's examples folder.
+    Filename is auto-generated from the component names, e.g. ethanol_water.json
+    """
+    os.makedirs(OUTPUT_EXAMPLES_DIR, exist_ok=True)
 
-    Returns the validated payload dict, or None if something went wrong.
-    This payload is what gets handed off to Group 2's DWSIM engine.
+    # Build a clean filename from component names
+    c1 = payload["component_1"].lower().replace(" ", "_").replace("-", "_")
+    c2 = payload["component_2"].lower().replace(" ", "_").replace("-", "_")
+    filename = f"{c1}_{c2}.json"
+    filepath = os.path.join(OUTPUT_EXAMPLES_DIR, filename)
+
+    with open(filepath, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    return filepath
+
+# =============================================================================
+# STEP 4: Full pipeline
+# =============================================================================
+
+def run_pipeline(user_question: str) -> dict:
+    """
+    Full Group 1 pipeline: question → LLM → validated JSON → saved file.
+    Returns the payload dict, or None if something went wrong.
     """
     print("=" * 60)
-    print("GROUP 1: LLM Orchestrator — Txy Pipeline")
+    print("GROUP 1: LLM Orchestrator")
     print("=" * 60)
-    print(f"User Question: \"{user_question}\"")
+    print(f'User Question: "{user_question}"')
 
-    # Step A: Call the LLM
     try:
         payload = call_llm(user_question)
     except ValueError as e:
         print(f"\n[ERROR] {e}")
         return None
 
-    # Step B: Validate
     is_valid = validate_payload(payload)
-
     if not is_valid:
         print("\n[PIPELINE] Payload failed validation. Cannot pass to Group 2.")
-        print("[PIPELINE] Please refine the user question and try again.")
         return None
 
-    # Step C: Output the clean payload for Group 2
+    filepath = save_payload(payload)
+
     print("\n" + "=" * 60)
-    print("FINAL PAYLOAD (ready for Group 2 - DWSIM Engine):")
+    print("FINAL PAYLOAD (Group 2 format):")
     print("=" * 60)
     print(json.dumps(payload, indent=2))
-
-    # Optionally save the payload to a file so Group 2 can read it
-    output_path = os.path.join(SCRIPT_DIR, "..", "output", "txy_request.json")
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(payload, f, indent=2)
-    print(f"\n[OUTPUT] Payload saved to: output/txy_request.json")
-    print("[OUTPUT] Group 2 can now read this file to run DWSIM.")
+    print(f"\n[OUTPUT] Saved to: {filepath}")
+    print("[OUTPUT] Group 2 can now run: python tasks/txy_engine.py tasks/examples/" + os.path.basename(filepath))
 
     return payload
 
-
 # =============================================================================
-# STEP 5: Entry point — run interactively
+# STEP 5: Entry point
 # =============================================================================
 
 if __name__ == "__main__":
     print("\nTxy Phase Diagram — LLM Orchestrator")
-    print("Type your question below. Example:")
-    print('  "Generate a Txy diagram for ethanol and water at 1 atm"\n')
+    print("Example prompts:")
+    print('  "Generate a Txy diagram for ethanol and water at 1 atm"')
+    print('  "I need a phase envelope for benzene and toluene at 2 bar"')
+    print('  "Txy diagram for methanol and acetone at atmospheric pressure"\n')
 
     user_input = input("Your question: ").strip()
 
@@ -175,9 +176,7 @@ if __name__ == "__main__":
         print("[ERROR] No input provided. Exiting.")
     else:
         result = run_pipeline(user_input)
-
         if result:
             print("\n[DONE] Pipeline completed successfully.")
-            print("       Payload is ready for Group 2 (DWSIM engine).")
         else:
             print("\n[DONE] Pipeline ended with errors. Check messages above.")
