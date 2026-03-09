@@ -1,0 +1,8 @@
+{
+  "task_type": "txy",
+  "component_1": "Carbon dioxide",
+  "component_2": "Isobutane",
+  "pressure_Pa": 101325.0,
+  "n_points": 20,
+  "property_package": "PR"
+}

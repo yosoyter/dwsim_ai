@@ -1,7 +1,7 @@
 {
   "task_type": "txy",
   "component_1": "Methanol",
-  "component_2": "Water",
+  "component_2": "Acetone",
   "pressure_Pa": 101325.0,
   "n_points": 20,
   "property_package": "NRTL"

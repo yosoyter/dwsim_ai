@@ -1,8 +1,8 @@
 {
-    "task_type": "txy",
-    "component_1": "Benzene",
-    "component_2": "Toluene",
-    "pressure_Pa": 101325.0,
-    "n_points": 20,
-    "property_package": "PR"
+  "task_type": "txy",
+  "component_1": "Benzene",
+  "component_2": "Toluene",
+  "pressure_Pa": 101325.0,
+  "n_points": 20,
+  "property_package": "NRTL"
 }

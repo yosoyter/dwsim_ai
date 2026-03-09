@@ -4,10 +4,10 @@ DWSIM/tests/test_txy_engine.py
 Pytest unit + integration tests for the Group 2 Txy engine.
 
 All tests run in MOCK mode (no DWSIM required).
-On the workstation with DWSIM, mock mode auto-disables and real flashes run.
+On the workstation with DWSIM, mock mode auto-disables and real BinaryEnvelopeUtility runs.
 
 Run from repo root:
-    python -m pytest DWSIM/tests/test_txy_engine.py -v
+    python -m pytest DWSIM_ry_test/tests/test_txy_engine.py -v
 """
 
 import sys
@@ -25,6 +25,7 @@ from DWSIM_ry_test.tasks.txy_engine import (
     run_txy_task,
     _mock_txy,
     _auto_select_package,
+    generate_txy_plot,
 )
 
 
@@ -111,6 +112,7 @@ class TestAutoPackageSelection:
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  3.  MOCK Txy CALCULATION TESTS
+#  Now checks the new schema: x1 | T_bubble_K | T_bubble_C | T_dew_K | T_dew_C
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestMockTxy:
@@ -126,45 +128,64 @@ class TestMockTxy:
 
     def test_required_columns_present(self):
         df = _mock_txy("Ethanol", "Water", 101325.0, 20)
-        assert set(df.columns) == {"x1", "y1", "T_K", "T_C"}
+        required = {"x1", "T_bubble_K", "T_bubble_C", "T_dew_K", "T_dew_C"}
+        assert required.issubset(set(df.columns)), \
+            f"Missing columns: {required - set(df.columns)}"
 
     def test_x1_spans_zero_to_one(self):
         df = _mock_txy("Ethanol", "Water", 101325.0, 21)
-        assert abs(df["x1"].iloc[0])  < 1e-6, "First x1 should be 0"
+        assert abs(df["x1"].iloc[0])        < 1e-6, "First x1 should be 0"
         assert abs(df["x1"].iloc[-1] - 1.0) < 1e-6, "Last x1 should be 1"
 
-    def test_y1_bounded(self):
-        df = _mock_txy("Ethanol", "Water", 101325.0, 20)
-        assert df["y1"].between(0.0, 1.0).all(), "y1 must be in [0, 1]"
+    def test_bubble_below_dew(self):
+        """At intermediate compositions bubble T <= dew T (two-phase region)."""
+        df = _mock_txy("Ethanol", "Water", 101325.0, 21)
+        mid = df[(df["x1"] > 0.05) & (df["x1"] < 0.95)]
+        assert (mid["T_bubble_K"] <= mid["T_dew_K"] + 0.1).all(), \
+            "Bubble point must be <= dew point"
 
-    def test_T_K_and_T_C_consistent(self):
+    def test_T_K_and_T_C_consistent_bubble(self):
         df = _mock_txy("Ethanol", "Water", 101325.0, 10)
-        diff = (df["T_K"] - df["T_C"] - 273.15).abs()
-        assert diff.max() < 0.01, "T_K and T_C must differ by exactly 273.15 K"
+        diff = (df["T_bubble_K"] - df["T_bubble_C"] - 273.15).abs()
+        assert diff.max() < 0.01, "T_bubble_K and T_bubble_C must differ by 273.15"
+
+    def test_T_K_and_T_C_consistent_dew(self):
+        df = _mock_txy("Ethanol", "Water", 101325.0, 10)
+        diff = (df["T_dew_K"] - df["T_dew_C"] - 273.15).abs()
+        assert diff.max() < 0.01, "T_dew_K and T_dew_C must differ by 273.15"
 
     def test_ethanol_boiling_point(self):
-        """Pure ethanol (x1=1) should boil near 78.4°C at 1 atm."""
+        """Pure ethanol (x1=1) bubble point near 78.4°C at 1 atm."""
         df = _mock_txy("Ethanol", "Water", 101325.0, 21)
-        T_eth = df.loc[df["x1"] == 1.0, "T_C"].values[0]
-        assert abs(T_eth - 78.4) < 5.0, f"Ethanol bp off: {T_eth:.1f}°C"
+        T_eth = df.loc[df["x1"] == 1.0, "T_bubble_C"].values[0]
+        assert abs(T_eth - 78.4) < 3.0, f"Ethanol bp off: {T_eth:.1f}°C"
 
     def test_water_boiling_point(self):
-        """Pure water (x1=0) should boil near 100°C at 1 atm."""
+        """Pure water (x1=0) bubble point near 100°C at 1 atm."""
         df = _mock_txy("Ethanol", "Water", 101325.0, 21)
-        T_water = df.loc[df["x1"] == 0.0, "T_C"].values[0]
-        assert abs(T_water - 100.0) < 5.0, f"Water bp off: {T_water:.1f}°C"
+        T_water = df.loc[df["x1"] == 0.0, "T_bubble_C"].values[0]
+        assert abs(T_water - 100.0) < 3.0, f"Water bp off: {T_water:.1f}°C"
+
+    def test_pure_components_bubble_equals_dew(self):
+        """At x1=0 and x1=1, bubble and dew T must be equal (pure component)."""
+        df = _mock_txy("Ethanol", "Water", 101325.0, 21)
+        for x1_val in [0.0, 1.0]:
+            row = df[df["x1"] == x1_val]
+            assert abs(float(row["T_bubble_K"].values[0]) - float(row["T_dew_K"].values[0])) < 1.0, \
+                f"Pure component at x1={x1_val}: bubble != dew"
 
     def test_benzene_toluene(self):
-        """Benzene/Toluene should also produce valid output."""
+        """Benzene/Toluene should produce valid output."""
         df = _mock_txy("Benzene", "Toluene", 101325.0, 10)
         assert len(df) == 10
-        assert df["T_C"].notna().all()
+        assert df["T_bubble_C"].notna().all()
+        assert df["T_dew_C"].notna().all()
 
     def test_higher_pressure_raises_bp(self):
         """At 2 atm the boiling points should be higher than at 1 atm."""
         df_1atm = _mock_txy("Ethanol", "Water", 101325.0, 10)
         df_2atm = _mock_txy("Ethanol", "Water", 202650.0, 10)
-        assert df_2atm["T_C"].mean() > df_1atm["T_C"].mean()
+        assert df_2atm["T_bubble_C"].mean() > df_1atm["T_bubble_C"].mean()
 
     def test_unknown_components_fallback(self):
         """Unknowns get a safe linear fallback — should not raise."""
@@ -173,25 +194,57 @@ class TestMockTxy:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  4.  FULL PIPELINE INTEGRATION TESTS (mock mode)
+#  4.  PLOT GENERATION TESTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPlotGeneration:
+
+    def test_plot_saves_png(self, tmp_path):
+        df = _mock_txy("Ethanol", "Water", 101325.0, 20)
+        png = generate_txy_plot(df, "Ethanol", "Water", 101325.0, "NRTL",
+                                str(tmp_path), temp_unit="K")
+        assert os.path.isfile(png), "PNG file not created"
+        assert png.endswith(".png")
+
+    def test_plot_celsius_unit(self, tmp_path):
+        df = _mock_txy("Ethanol", "Water", 101325.0, 20)
+        png = generate_txy_plot(df, "Ethanol", "Water", 101325.0, "NRTL",
+                                str(tmp_path), temp_unit="C")
+        assert os.path.isfile(png)
+
+    def test_plot_benzene_toluene(self, tmp_path):
+        df = _mock_txy("Benzene", "Toluene", 101325.0, 20)
+        png = generate_txy_plot(df, "Benzene", "Toluene", 101325.0, "PR",
+                                str(tmp_path), temp_unit="K")
+        assert os.path.isfile(png)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  5.  FULL PIPELINE INTEGRATION TESTS (mock mode)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestFullPipeline:
 
     def test_pipeline_returns_dataframe(self, ethanol_water_task, tmp_path):
-        df = run_txy_task(ethanol_water_task, output_dir=str(tmp_path))
+        df = run_txy_task(ethanol_water_task, output_dir=str(tmp_path), plot=False)
         assert isinstance(df, pd.DataFrame)
         assert len(df) == ethanol_water_task["n_points"]
 
     def test_csv_written_to_output(self, ethanol_water_task, tmp_path):
-        run_txy_task(ethanol_water_task, output_dir=str(tmp_path))
+        run_txy_task(ethanol_water_task, output_dir=str(tmp_path), plot=False)
         csv = tmp_path / "txy_Ethanol_Water.csv"
         assert csv.exists(), "CSV output file not found"
 
     def test_csv_has_correct_columns(self, ethanol_water_task, tmp_path):
-        run_txy_task(ethanol_water_task, output_dir=str(tmp_path))
+        run_txy_task(ethanol_water_task, output_dir=str(tmp_path), plot=False)
         df = pd.read_csv(tmp_path / "txy_Ethanol_Water.csv")
-        assert list(df.columns) == ["x1", "y1", "T_K", "T_C"]
+        required = {"x1", "T_bubble_K", "T_bubble_C", "T_dew_K", "T_dew_C"}
+        assert required.issubset(set(df.columns))
+
+    def test_png_written_to_output(self, ethanol_water_task, tmp_path):
+        run_txy_task(ethanol_water_task, output_dir=str(tmp_path), plot=True, temp_unit="K")
+        png = tmp_path / "txy_Ethanol_Water.png"
+        assert png.exists(), "PNG output file not found"
 
     def test_auto_package_not_specified(self, tmp_path):
         """Task without property_package should auto-select NRTL for Ethanol/Water."""
@@ -202,27 +255,28 @@ class TestFullPipeline:
             "pressure_Pa": 101325.0,
             "n_points":    10,
         }
-        df = run_txy_task(task, output_dir=str(tmp_path))
+        df = run_txy_task(task, output_dir=str(tmp_path), plot=False)
         assert len(df) == 10
 
     def test_invalid_task_raises_before_dwsim(self, tmp_path):
         """Bad task spec must raise before any DWSIM calls."""
         bad_task = {"task_type": "txy", "component_1": "Ethanol"}   # missing comp2
         with pytest.raises((ValueError, KeyError)):
-            run_txy_task(bad_task, output_dir=str(tmp_path))
+            run_txy_task(bad_task, output_dir=str(tmp_path), plot=False)
 
     def test_benzene_toluene_pipeline(self, benzene_toluene_task, tmp_path):
-        df = run_txy_task(benzene_toluene_task, output_dir=str(tmp_path))
+        df = run_txy_task(benzene_toluene_task, output_dir=str(tmp_path), plot=False)
         assert len(df) == benzene_toluene_task["n_points"]
-        assert df["y1"].between(0.0, 1.0).all()
+        assert df["T_bubble_K"].notna().all()
+        assert df["T_dew_K"].notna().all()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  5.  EXAMPLE JSON FILES LOAD CORRECTLY
+#  6.  EXAMPLE JSON FILES LOAD CORRECTLY
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestExampleJsonFiles:
-    """Verify the example task files in DWSIM/tasks/examples/ are valid."""
+    """Verify the example task files in DWSIM_ry_test/tasks/examples/ are valid."""
 
     EXAMPLES_DIR = os.path.join(
         os.path.dirname(__file__), "..", "tasks", "examples"

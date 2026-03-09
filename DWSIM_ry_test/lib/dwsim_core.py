@@ -152,6 +152,7 @@ def add_component(sim, component_name: str):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def select_property_package(sim, package_tag: str):
+    
     """
     Instantiate and attach a property package to the flowsheet.
 
