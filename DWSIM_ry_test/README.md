@@ -150,5 +150,4 @@ The JSON schema at `tasks/txy_task_schema.json` defines exactly what fields Grou
 
 
 Set Key:
-
-ANTHROPIC_API_KEY=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
+ANTHROPIC_API_KEY=your_key_here
