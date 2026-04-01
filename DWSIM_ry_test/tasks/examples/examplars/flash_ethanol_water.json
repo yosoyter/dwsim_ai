@@ -1,0 +1,10 @@
+{
+  "components": {
+    "Ethanol": 0.4,
+    "Water":   0.6
+  },
+  "pressure_Pa":      300000.0,
+  "temperature_K":    340.0,
+  "flash_type":       "PT",
+  "property_package": "NRTL"
+}

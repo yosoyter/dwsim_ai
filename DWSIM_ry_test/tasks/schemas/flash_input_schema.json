@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlashTask",
+  "description": "Input schema for the Flash Flowsheet engine (flash_engine.py). Topology: Feed → Cool-1 → FFEED → Flash1 → V + L. No valve.",
+  "type": "object",
+  "required": [
+    "components",
+    "pressure_Pa",
+    "temperature_K"
+  ],
+  "properties": {
+    "components": {
+      "type": "object",
+      "description": "Dict of {component_name: mole_fraction}. Keys must be valid DWSIM compound database names (case-sensitive). Values must sum to 1.0 (±0.02).",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0.0,
+        "maximum": 1.0
+      }
+    },
+    "pressure_Pa": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Feed stream pressure [Pa]. Must be greater than flash_pressure_Pa."
+    },
+    "temperature_K": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Feed stream temperature [K]."
+    },
+    "flash_type": {
+      "type": "string",
+      "enum": ["PT"],
+      "default": "PT",
+      "description": "Flash specification type. Currently only 'PT' (pressure-temperature) is supported."
+    },
+    "property_package": {
+      "type": "string",
+      "description": "Thermodynamic property package. Auto-selected if omitted (PR for non-polar, NRTL for polar). Accepts aliases e.g. 'Peng-Robinson' normalizes to 'PR'.",
+      "examples": ["PR", "Peng-Robinson", "NRTL", "SRK", "UNIQUAC", "IDEAL", "STEAM"]
+    },
+    "cooler_temp_K": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Cooler outlet temperature [K]. Optional — defaults to temperature_K - 90 if omitted."
+    },
+    "flash_pressure_Pa": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Flash drum operating pressure [Pa]. Optional — defaults to pressure_Pa × 0.971 if omitted. Must be less than pressure_Pa."
+    },
+    "feed_flow_molh": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 100.0,
+      "description": "Feed molar flow rate [mol/h]. Optional, defaults to 100.0 mol/h."
+    }
+  },
+  "additionalProperties": true,
+
+  "_note": "task_type is NOT a required field here. The pipeline router (run_pipeline.bat) detects task_type from the orchestrator JSON and calls flash_engine.py directly.",
+
+  "_examples": {
+    "professor_example": {
+      "components": {
+        "Hydrogen": 0.3,
+        "Methane":  0.6,
+        "Benzene":  0.075,
+        "Toluene":  0.025
+      },
+      "pressure_Pa":       3447370.0,
+      "temperature_K":     410.0,
+      "flash_type":        "PT",
+      "property_package":  "Peng-Robinson",
+      "cooler_temp_K":     320.0,
+      "flash_pressure_Pa": 3350000.0,
+      "feed_flow_molh":    5596990.0,
+      "_validated": "Cooler removes 10345.38 kW, V_frac=0.906, V=5074 kmol/h, L=522 kmol/h"
+    },
+    "ethanol_water": {
+      "components": {"Ethanol": 0.4, "Water": 0.6},
+      "pressure_Pa":       300000.0,
+      "temperature_K":     340.0,
+      "flash_type":        "PT",
+      "property_package":  "NRTL",
+      "cooler_temp_K":     320.0,
+      "flash_pressure_Pa": 101325.0,
+      "feed_flow_molh":    100.0
+    },
+    "minimal_required_only": {
+      "components": {"Methane": 0.7, "Benzene": 0.3},
+      "pressure_Pa":   2000000.0,
+      "temperature_K": 400.0
+    }
+  },
+
+  "_field_changes_from_v1": {
+    "removed": [
+      "task_type         — no longer required in this file",
+      "feed_composition  — merged into components dict",
+      "feed_temp_K       — renamed to temperature_K",
+      "feed_pressure_Pa  — renamed to pressure_Pa",
+      "valve_pressure_Pa — removed, no valve in current topology",
+      "cooler_temp_K     — now optional with smart default (temperature_K - 90)"
+    ],
+    "added": [
+      "flash_type        — PT only for now",
+      "flash_pressure_Pa — replaces valve_pressure_Pa, optional (default pressure_Pa × 0.971)"
+    ],
+    "components_format": "Changed from array+feed_composition to single dict {name: mole_fraction}"
+  }
+}

@@ -144,3 +144,11 @@ The Txy output CSV is designed to be handed off to Group 3 for:
 
 Group 1's orchestrator calls `run_txy_task(task_dict)` and receives a `pd.DataFrame`.  
 The JSON schema at `tasks/txy_task_schema.json` defines exactly what fields Group 1 must provide.
+
+
+
+
+
+Set Key:
+
+ANTHROPIC_API_KEY=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

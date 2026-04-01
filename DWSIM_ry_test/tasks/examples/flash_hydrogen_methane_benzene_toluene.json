@@ -1,0 +1,16 @@
+{
+  "task_type": "flash",
+  "components": {
+    "Hydrogen": 0.3,
+    "Methane": 0.6,
+    "Benzene": 0.075,
+    "Toluene": 0.025
+  },
+  "pressure_Pa": 3447370.0,
+  "temperature_K": 410.0,
+  "flash_type": "PT",
+  "cooler_temp_K": 320.0,
+  "flash_pressure_Pa": 3350000.0,
+  "feed_flow_molh": 100.0,
+  "property_package": "PR"
+}
