@@ -599,15 +599,12 @@ def _run_dwsim_isothermal_pt_flash(
     drum_temp_K, drum_press,
     pkg_tag, dwsim_path, output_dir
 ) -> dict:
-    """Build and solve a direct Feed → Flash drum in DWSIM (no cooler, no valve)."""
     import pythoncom
     pythoncom.CoInitialize()
 
     from DWSIM_ry_test.lib.dwsim_core import (
         init_dwsim, create_flowsheet, select_property_package, save_flowsheet,
     )
-    from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
-    from DWSIM.GlobalSettings import Settings
 
     interf = init_dwsim(dwsim_path)
     sim    = create_flowsheet(interf)
@@ -618,18 +615,28 @@ def _run_dwsim_isothermal_pt_flash(
 
     select_property_package(sim, pkg_tag)
 
-    # Material streams
-    feed_obj   = sim.AddObject(ObjectType.MaterialStream, 50,  300, "FEED").GetAsObject()
-    vapor_obj  = sim.AddObject(ObjectType.MaterialStream, 450, 100, "V"   ).GetAsObject()
-    liquid_obj = sim.AddObject(ObjectType.MaterialStream, 450, 500, "L"   ).GetAsObject()
+    # Enums must be imported AFTER init_dwsim loads the .NET DLLs
+    from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
+    from DWSIM.UnitOperations import UnitOperations as DWSIMUnitOps
+    from DWSIM.GlobalSettings import Settings
 
-    # Energy stream
-    e1 = sim.AddObject(ObjectType.EnergyStream, 300, 500, "E1").GetAsObject()
+    # ── Material streams ────────────────────────────────────────────────────
+    feed_obj   = sim.AddObject(ObjectType.MaterialStream, 50,  300, "FEED" ).GetAsObject()
+    fdrum_obj  = sim.AddObject(ObjectType.MaterialStream, 300, 300, "FDRUM").GetAsObject()
+    vapor_obj  = sim.AddObject(ObjectType.MaterialStream, 550, 100, "V"    ).GetAsObject()
+    liquid_obj = sim.AddObject(ObjectType.MaterialStream, 550, 500, "L"    ).GetAsObject()
 
-    # Flash drum
-    flash_uo = sim.AddObject(ObjectType.Vessel, 300, 300, "Flash1").GetAsObject()
+    # ── Energy streams ──────────────────────────────────────────────────────
+    e1 = sim.AddObject(ObjectType.EnergyStream, 175, 500, "E1").GetAsObject()
+    e2 = sim.AddObject(ObjectType.EnergyStream, 425, 500, "E2").GetAsObject()
 
-    # Configure feed
+    # ── Unit operations ─────────────────────────────────────────────────────
+    # Use a Cooler to set the drum temperature (isothermal: same T as feed)
+    # and drop the pressure from feed_press to drum_press
+    cooler_uo = sim.AddObject(ObjectType.Cooler, 175, 300, "Cool-1").GetAsObject()
+    flash_uo  = sim.AddObject(ObjectType.Vessel,  425, 300, "Flash1").GetAsObject()
+
+    # ── Configure feed ──────────────────────────────────────────────────────
     feed_obj.SetTemperature(feed_temp_K)
     feed_obj.SetPressure(feed_press)
     feed_obj.SetMolarFlow(feed_flow)
@@ -637,19 +644,26 @@ def _run_dwsim_isothermal_pt_flash(
         mole_frac = float(comp_dict.get(comp_name, 0.0))
         feed_obj.SetOverallCompoundMolarFlow(comp_name, mole_frac * feed_flow)
 
-    # Force drum to specified T and P via the feed stream
-    # The Vessel unit op inherits T and P from its inlet stream.
-    # We set the feed to drum conditions directly.
-    feed_obj.SetTemperature(drum_temp_K)
-    feed_obj.SetPressure(drum_press)
+    print(f"[flash_engine] Feed: {feed_temp_K-273.15:.1f} C, {feed_press/1e5:.2f} bar, {feed_flow*3600:.1f} mol/h")
 
-    # Wire: FEED → Flash1 → V / L
-    sim.ConnectObjects(feed_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
-    sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
-    sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
-    sim.ConnectObjects(e1.GraphicObject,        flash_uo.GraphicObject,   -1, -1)
+    # ── Configure cooler to drop pressure and set drum temperature ──────────
+    cooler_uo.CalcMode = DWSIMUnitOps.Cooler.CalculationMode.OutletTemperature
+    cooler_uo.OutletTemperature = drum_temp_K
+    cooler_uo.PressureDrop = feed_press - drum_press
+
+    print(f"[flash_engine] Cooler: T_out={drum_temp_K-273.15:.1f} C, dP={( feed_press-drum_press)/1e5:.2f} bar")
+
+    # ── Wire: FEED → Cool-1 → FDRUM → Flash1 → V / L ──────────────────────
+    sim.ConnectObjects(feed_obj.GraphicObject,   cooler_uo.GraphicObject,  -1, -1)
+    sim.ConnectObjects(cooler_uo.GraphicObject,  fdrum_obj.GraphicObject,  -1, -1)
+    sim.ConnectObjects(e1.GraphicObject,         cooler_uo.GraphicObject,  -1, -1)
+    sim.ConnectObjects(fdrum_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,   vapor_obj.GraphicObject,  -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,   liquid_obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(e2.GraphicObject,         flash_uo.GraphicObject,   -1, -1)
     sim.AutoLayout()
 
+    # ── Solve ───────────────────────────────────────────────────────────────
     Settings.SolverMode = 0
     errors = interf.CalculateFlowsheet4(sim)
     if errors is not None and len(errors) > 0:
@@ -657,8 +671,10 @@ def _run_dwsim_isothermal_pt_flash(
 
     print("[flash_engine] isothermal_PT_flash solved successfully.")
 
+    # ── Extract results ─────────────────────────────────────────────────────
     results = {
         "feed":             _extract_stream(feed_obj,   "FEED", comp_names),
+        "drum_inlet":       _extract_stream(fdrum_obj,  "FDRUM", comp_names),
         "vapor":            _extract_stream(vapor_obj,  "V",    comp_names),
         "liquid":           _extract_stream(liquid_obj, "L",    comp_names),
         "property_package": pkg_tag,
