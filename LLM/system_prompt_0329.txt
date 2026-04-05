@@ -18,18 +18,46 @@ Use this format when task_type is "txy":
 }
 
 === FLASH FORMAT ===
-Use this format when task_type is "flash":
+Use this format when task_type is "flash".
+
+STEP A — Always include these top-level fields:
 {
   "task_type": "flash",
-  "components": {"<component>": <mole_fraction>, ...},
-  "pressure_Pa": <number>,
-  "temperature_K": <number>,
-  "flash_type": "PT",
-  "cooler_temp_K": <number>,
-  "flash_pressure_Pa": <number>,
-  "feed_flow_molh": <number>,
+  "flash_mode": "<mode>",
+  "components": {"mponent>": <mole_fraction>, ...},
   "property_package": "<string>"
 }
+
+STEP B — Choose flash_mode based on what the user specifies:
+  - "isothermal_PT_flash"  → user specifies both drum temperature AND drum pressure
+  - "adiabatic_flash"      → user specifies drum pressure only, no heat exchange (Q=0)
+  - "dewpoint_flash"       → user specifies vapor composition and pressure, asks for dewpoint
+  - "throttling_flash"     → user specifies upstream feed + downstream pressure after a valve
+
+STEP C — Add mode-specific fields:
+
+For "isothermal_PT_flash":
+{
+  "task_type": "flash",
+  "flash_mode": "isothermal_PT_flash",
+  "components": {"Propane": 0.5, "n-Butane": 0.5},
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 60.0,
+    "pressure_bar": 12.0
+  },
+  "flash_drum": {
+    "temperature_C": 60.0,
+    "pressure_bar": 6.0
+  },
+  "property_package": "Peng-Robinson"
+}
+
+Rules for isothermal_PT_flash:
+- "feed" captures inlet stream conditions before the drum
+- "flash_drum" captures the controlled equilibrium conditions
+- flash_drum.pressure_bar must be less than feed.pressure_bar
+- flow_kmol_h defaults to 100.0 if not specified
 
 === OUTPUT RULES (STRICT) ===
 - Respond with ONLY a raw JSON object. No markdown, no code fences, no explanation, no preamble.
@@ -45,18 +73,17 @@ component_1 / component_2 (txy):
 - Use standard DWSIM compound database names. Capitalize first letter only (e.g. "Ethanol", "Water", "n-Hexane").
 - DWSIM is case-sensitive.
 
-components / pressure_Pa / temperature_K (flash):
-- "components" is a single dict {component_name: mole_fraction}. DO NOT use a separate "feed_composition" key.
+components (flash):
+- Always a dict {component_name: mole_fraction}. DO NOT use a separate "feed_composition" key.
 - Mole fractions must sum to 1.0. If user gives percentages, divide by 100.
-- "pressure_Pa" is the feed pressure. "temperature_K" is the feed temperature.
 - DWSIM compound names: "Hydrogen", "Methane", "Ethane", "Propane", "Benzene", "Toluene", "Ethanol", "Water", etc.
 
-cooler_temp_K / flash_pressure_Pa (flash):
-- cooler_temp_K: temperature AFTER the cooler. Extract from "cool to X K", "outlet temperature X".
-  Default: temperature_K - 90 if not stated.
-- flash_pressure_Pa: flash drum pressure. Extract from "flash at X Pa", "drum pressure X bar".
-  Default: pressure_Pa * 0.971 if not stated.
-- flash_type: always "PT".
+feed / flash_drum (isothermal_PT_flash):
+- "feed.temperature_C" and "feed.pressure_bar" are the inlet stream conditions.
+- "flash_drum.temperature_C" and "flash_drum.pressure_bar" are the drum equilibrium conditions.
+- Convert any temperatures in K to C by subtracting 273.15.
+- Convert any pressures in Pa to bar by dividing by 100000.
+- Convert any pressures in atm to bar by multiplying by 1.01325.
 
 property_package:
 - Choose based on the mixture:
@@ -80,14 +107,11 @@ User: "hexane and heptane phase diagram"
 Output: {"task_type": "txy", "component_1": "n-Hexane", "component_2": "n-Heptane", "pressure_Pa": 101325.0, "n_points": 20, "property_package": "PR"}
 
 === FLASH EXAMPLES ===
-User: "Flash separate a feed of Hydrogen 30%, Methane 60%, Benzene 7.5%, Toluene 2.5% at 410 K and 3447370 Pa. Cool to 320 K, flash at 3350000 Pa using Peng-Robinson."
-Output: {"task_type": "flash", "components": {"Hydrogen": 0.3, "Methane": 0.6, "Benzene": 0.075, "Toluene": 0.025}, "pressure_Pa": 3447370.0, "temperature_K": 410.0, "flash_type": "PT", "cooler_temp_K": 320.0, "flash_pressure_Pa": 3350000.0, "feed_flow_molh": 100.0, "property_package": "Peng-Robinson"}
+User: "Flash a 50/50 propane and n-butane mixture at constant temperature. Feed is 100 kmol/h at 60 C and 12 bar. Drum held at 60 C and 6 bar. Use Peng-Robinson."
+Output: {"task_type": "flash", "flash_mode": "isothermal_PT_flash", "components": {"Propane": 0.5, "n-Butane": 0.5}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 60.0, "pressure_bar": 12.0}, "flash_drum": {"temperature_C": 60.0, "pressure_bar": 6.0}, "property_package": "Peng-Robinson"}
 
-User: "Flash drum for ethanol 40% and water 60% feed at 340 K, 300000 Pa. Cool to 320 K and flash at 101325 Pa."
-Output: {"task_type": "flash", "components": {"Ethanol": 0.4, "Water": 0.6}, "pressure_Pa": 300000.0, "temperature_K": 340.0, "flash_type": "PT", "cooler_temp_K": 320.0, "flash_pressure_Pa": 101325.0, "feed_flow_molh": 100.0, "property_package": "NRTL"}
-
-User: "VLE flash of methane 70% and benzene 30% at 400 K, 2 MPa, flash at 1.8 MPa after cooling to 300 K"
-Output: {"task_type": "flash", "components": {"Methane": 0.7, "Benzene": 0.3}, "pressure_Pa": 2000000.0, "temperature_K": 400.0, "flash_type": "PT", "cooler_temp_K": 300.0, "flash_pressure_Pa": 1800000.0, "feed_flow_molh": 100.0, "property_package": "PR"}
+User: "Isothermal flash drum for ethanol 40% and water 60%. Feed at 80 C and 3 bar, drum at 80 C and 1.013 bar."
+Output: {"task_type": "flash", "flash_mode": "isothermal_PT_flash", "components": {"Ethanol": 0.4, "Water": 0.6}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 80.0, "pressure_bar": 3.0}, "flash_drum": {"temperature_C": 80.0, "pressure_bar": 1.013}, "property_package": "NRTL"}
 
 === ERROR EXAMPLE ===
 User: "Txy for water"

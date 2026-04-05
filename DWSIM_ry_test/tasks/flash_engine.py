@@ -62,7 +62,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
 sys.path.insert(0, _ROOT)
 
-DWSIM_PATH = r"C:\Users\rickyyu\AppData\Local\DWSIM"
+DWSIM_PATH = r"C:\Users\terrBear\AppData\Local\DWSIM"
 OUTPUT_DIR  = os.path.join(_ROOT, "output")
 
 POLAR_COMPONENTS = {
@@ -589,6 +589,278 @@ def print_flash_summary(results: dict) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ISOTHERMAL PT FLASH — DWSIM path
+# Topology: FEED ──► [Flash1] ──► V (Vapor)
+#                              └──► L (Liquid)
+# ─────────────────────────────────────────────────────────────────────────────
+def _run_dwsim_isothermal_pt_flash(
+    comp_list, comp_dict,
+    feed_temp_K, feed_press, feed_flow,
+    drum_temp_K, drum_press,
+    pkg_tag, dwsim_path, output_dir
+) -> dict:
+    """Build and solve a direct Feed → Flash drum in DWSIM (no cooler, no valve)."""
+    import pythoncom
+    pythoncom.CoInitialize()
+
+    from DWSIM_ry_test.lib.dwsim_core import (
+        init_dwsim, create_flowsheet, select_property_package, save_flowsheet,
+    )
+    from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
+    from DWSIM.GlobalSettings import Settings
+
+    interf = init_dwsim(dwsim_path)
+    sim    = create_flowsheet(interf)
+
+    for comp in comp_list:
+        sim.AddCompound(comp)
+    comp_names = list(sim.SelectedCompounds.Keys)
+
+    select_property_package(sim, pkg_tag)
+
+    # Material streams
+    feed_obj   = sim.AddObject(ObjectType.MaterialStream, 50,  300, "FEED").GetAsObject()
+    vapor_obj  = sim.AddObject(ObjectType.MaterialStream, 450, 100, "V"   ).GetAsObject()
+    liquid_obj = sim.AddObject(ObjectType.MaterialStream, 450, 500, "L"   ).GetAsObject()
+
+    # Energy stream
+    e1 = sim.AddObject(ObjectType.EnergyStream, 300, 500, "E1").GetAsObject()
+
+    # Flash drum
+    flash_uo = sim.AddObject(ObjectType.Vessel, 300, 300, "Flash1").GetAsObject()
+
+    # Configure feed
+    feed_obj.SetTemperature(feed_temp_K)
+    feed_obj.SetPressure(feed_press)
+    feed_obj.SetMolarFlow(feed_flow)
+    for comp_name in comp_names:
+        mole_frac = float(comp_dict.get(comp_name, 0.0))
+        feed_obj.SetOverallCompoundMolarFlow(comp_name, mole_frac * feed_flow)
+
+    # Force drum to specified T and P via the feed stream
+    # The Vessel unit op inherits T and P from its inlet stream.
+    # We set the feed to drum conditions directly.
+    feed_obj.SetTemperature(drum_temp_K)
+    feed_obj.SetPressure(drum_press)
+
+    # Wire: FEED → Flash1 → V / L
+    sim.ConnectObjects(feed_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(e1.GraphicObject,        flash_uo.GraphicObject,   -1, -1)
+    sim.AutoLayout()
+
+    Settings.SolverMode = 0
+    errors = interf.CalculateFlowsheet4(sim)
+    if errors is not None and len(errors) > 0:
+        raise RuntimeError("[flash_engine] Solver errors:\n" + "\n".join(str(e) for e in errors))
+
+    print("[flash_engine] isothermal_PT_flash solved successfully.")
+
+    results = {
+        "feed":             _extract_stream(feed_obj,   "FEED", comp_names),
+        "vapor":            _extract_stream(vapor_obj,  "V",    comp_names),
+        "liquid":           _extract_stream(liquid_obj, "L",    comp_names),
+        "property_package": pkg_tag,
+    }
+
+    os.makedirs(output_dir, exist_ok=True)
+    tag = "_".join(comp_list)
+    save_flowsheet(interf, sim, os.path.join(output_dir, f"isothermal_pt_flash_{tag}.dwxmz"))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ISOTHERMAL PT FLASH — Mock path (Rachford-Rice, no DWSIM)
+# ─────────────────────────────────────────────────────────────────────────────
+def _mock_isothermal_pt_flash(
+    comp_list, comp_dict,
+    feed_temp_K, feed_press,
+    drum_temp_K, drum_press,
+    feed_flow_mol_s
+) -> dict:
+    """Approximate isothermal PT flash using Rachford-Rice + Antoine/calibrated K-values."""
+    import math
+
+    ANTOINE = {
+        "ETHANOL":  (8.04494, 1554.30,  222.65),
+        "WATER":    (8.07131, 1730.63,  233.426),
+        "BENZENE":  (6.89272, 1203.531, 219.888),
+        "TOLUENE":  (6.95805, 1346.773, 219.693),
+        "METHANOL": (7.87863, 1473.11,  230.00),
+        "ACETONE":  (7.02447, 1161.0,   224.0),
+    }
+    HIGH_PRESSURE_K = {
+        "HYDROGEN": 65.0, "METHANE": 8.0,  "BENZENE":  0.13,
+        "TOLUENE":  0.07, "ETHANE":  3.5,  "PROPANE":  2.0,
+        "N-BUTANE": 0.6,
+    }
+
+    z         = [comp_dict[c] for c in comp_list]
+    T_flash_C = drum_temp_K - 273.15
+    P_mmHg    = drum_press / 133.322
+
+    K = []
+    for comp in comp_list:
+        cu = comp.upper()
+        if cu in HIGH_PRESSURE_K:
+            K.append(HIGH_PRESSURE_K[cu])
+        elif cu in ANTOINE:
+            A, B, C = ANTOINE[cu]
+            Psat = 10 ** (A - B / (T_flash_C + C))
+            K.append(Psat / P_mmHg)
+        else:
+            K.append(1.0)
+
+    # Rachford-Rice
+    def rr(V):
+        return sum(z[i] * (K[i] - 1) / (1 + V * (K[i] - 1)) for i in range(len(z)))
+
+    sum_Kz  = sum(K[i] * z[i] for i in range(len(z)))
+    sum_zK  = sum(z[i] / K[i] for i in range(len(z)))
+
+    if sum_Kz <= 1.0:
+        V_frac = 0.0
+    elif sum_zK <= 1.0:
+        V_frac = 1.0
+    else:
+        lo, hi = 1e-8, 1 - 1e-8
+        for _ in range(200):
+            mid = (lo + hi) / 2
+            if rr(mid) > 0:
+                lo = mid
+            else:
+                hi = mid
+            if hi - lo < 1e-12:
+                break
+        V_frac = (lo + hi) / 2
+
+    x_raw = [z[i] / (1 + V_frac * (K[i] - 1)) for i in range(len(z))]
+    y_raw = [K[i] * x_raw[i] for i in range(len(z))]
+    xs = sum(x_raw); ys = sum(y_raw)
+    x_liq = [round(x / xs, 6) if xs > 1e-12 else round(z[i], 6) for i, x in enumerate(x_raw)]
+    y_vap = [round(y / ys, 6) if ys > 1e-12 else round(z[i], 6) for i, y in enumerate(y_raw)]
+
+    def _s(name, T_K, P_Pa, vf, fracs, flow_mol_s):
+        d = {
+            "stream":           name,
+            "T_K":              round(T_K, 4),
+            "T_C":              round(T_K - 273.15, 4),
+            "P_Pa":             round(P_Pa, 2),
+            "P_bar":            round(P_Pa / 1e5, 4),
+            "molar_flow_molh":  round(flow_mol_s * 3600, 4),
+            "vapor_fraction":   round(vf, 6),
+        }
+        for comp, xval in zip(comp_list, fracs):
+            d[f"x_{comp}"] = round(xval, 6)
+        return d
+
+    results = {
+        "feed":             _s("FEED", feed_temp_K, feed_press,  1.0,    z,     feed_flow_mol_s),
+        "vapor":            _s("V",    drum_temp_K,  drum_press, 1.0,    y_vap, feed_flow_mol_s * V_frac),
+        "liquid":           _s("L",    drum_temp_K,  drum_press, 0.0,    x_liq, feed_flow_mol_s * (1 - V_frac)),
+        "property_package": "MOCK (Rachford-Rice)",
+    }
+
+    print(f"[flash_engine] MOCK isothermal_PT_flash: V_frac = {V_frac:.4f}")
+    print(f"[flash_engine] K-values: " + ", ".join(f"{c}={K[i]:.3f}" for i, c in enumerate(comp_list)))
+    return results
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ISOTHERMAL PT FLASH — Public entry point
+# ─────────────────────────────────────────────────────────────────────────────
+def run_isothermal_pt_flash(
+    task: dict,
+    dwsim_path: str = DWSIM_PATH,
+    output_dir: str = None,
+) -> dict:
+    """
+    Run an isothermal PT flash: feed enters a drum held at fixed T and P.
+    No cooler or valve — the drum conditions are set directly.
+
+    Required JSON fields:
+        components       : {name: mole_fraction}
+        feed             : {flow_kmol_h, temperature_C, pressure_bar}
+        flash_drum       : {temperature_C, pressure_bar}
+        property_package : string
+    """
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+
+    comp_list = list(task["components"].keys())
+    comp_dict = {k: float(v) for k, v in task["components"].items()}
+    feed      = task["feed"]
+    drum      = task["flash_drum"]
+
+    feed_flow_mol_s = float(feed.get("flow_kmol_h", 100.0)) * 1000 / 3600  # mol/s
+    feed_temp_K     = float(feed["temperature_C"]) + 273.15
+    feed_press      = float(feed["pressure_bar"]) * 1e5   # Pa
+    drum_temp_K     = float(drum["temperature_C"]) + 273.15
+    drum_press      = float(drum["pressure_bar"]) * 1e5   # Pa
+
+    raw_pkg = task.get("property_package", "auto")
+    pkg_tag = _normalize_package(raw_pkg) if raw_pkg != "auto" else _auto_select_package(comp_list)
+
+    print(f"\n[flash_engine] ── isothermal_PT_flash ───────────────────────────")
+    print(f"[flash_engine] Components  : {comp_list}")
+    print(f"[flash_engine] Feed        : {feed['temperature_C']} C, {feed['pressure_bar']} bar")
+    print(f"[flash_engine] Drum        : {drum['temperature_C']} C, {drum['pressure_bar']} bar")
+    print(f"[flash_engine] Package     : {pkg_tag}")
+
+    dwsim_ready = DWSIM_AVAILABLE and os.path.isdir(dwsim_path)
+
+    if dwsim_ready:
+        results = _run_dwsim_isothermal_pt_flash(
+            comp_list, comp_dict,
+            feed_temp_K, feed_press, feed_flow_mol_s,
+            drum_temp_K, drum_press,
+            pkg_tag, dwsim_path, output_dir
+        )
+    else:
+        if DWSIM_AVAILABLE and not os.path.isdir(dwsim_path):
+            print(f"[flash_engine] DWSIM path not found: {dwsim_path} — using mock.")
+        results = _mock_isothermal_pt_flash(
+            comp_list, comp_dict,
+            feed_temp_K, feed_press,
+            drum_temp_K, drum_press,
+            feed_flow_mol_s
+        )
+
+    # Save CSV
+    os.makedirs(output_dir, exist_ok=True)
+    tag      = "_".join(comp_list)
+    rows     = [results[k] for k in ("feed", "vapor", "liquid") if k in results]
+    df       = pd.DataFrame(rows)
+    csv_path = os.path.join(output_dir, f"isothermal_pt_flash_{tag}.csv")
+    df.to_csv(csv_path, index=False)
+    print(f"[flash_engine] CSV saved: {csv_path}")
+
+    # Print summary
+    print("\n" + "=" * 72)
+    print(f" ISOTHERMAL PT FLASH RESULTS | Property Package: {results.get('property_package','—')}")
+    print(f" Feed → Flash1 → V / L  (no cooler, no valve)")
+    print("=" * 72)
+    for key in ("feed", "vapor", "liquid"):
+        if key not in results:
+            continue
+        s = results[key]
+        print(f"\n  {s['stream']:<6}  T={s['T_C']:.2f} C  P={s['P_bar']:.3f} bar  "
+              f"V_frac={s['vapor_fraction']:.4f}  flow={s['molar_flow_molh']:.2f} mol/h")
+        for k, v in s.items():
+            if k.startswith("x_"):
+                print(f"    {k:<22} = {v:.6f}")
+    v_flow = results.get("vapor", {}).get("molar_flow_molh", 0)
+    l_flow = results.get("liquid", {}).get("molar_flow_molh", 0)
+    if v_flow + l_flow > 0:
+        print(f"\n  Overall vapor fraction : {v_flow / (v_flow + l_flow):.4f}")
+        print(f"  V stream flow          : {v_flow:.2f} mol/h")
+        print(f"  L stream flow          : {l_flow:.2f} mol/h")
+    print("=" * 72 + "\n")
+
+    return results
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  MAIN PUBLIC FUNCTION
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -613,6 +885,13 @@ def run_flash_task(
     if output_dir is None:
         output_dir = OUTPUT_DIR
 
+    flash_mode = task.get("flash_mode", "legacy_flash")
+
+    # Route to mode-specific handler
+    if flash_mode == "isothermal_PT_flash":
+        return run_isothermal_pt_flash(task, dwsim_path=dwsim_path, output_dir=output_dir)
+
+    # Legacy path — original flat-schema flash (Feed→Cooler→Flash)
     validate_flash_task(task)
 
     comp_list, _ = _parse_components(task)

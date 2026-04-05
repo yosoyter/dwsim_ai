@@ -48,8 +48,10 @@ REQUIRED_FIELDS = {
         "pressure_Pa", "n_points", "property_package",
     ],
     "flash": [
-        "task_type", "components",
-        "pressure_Pa", "temperature_K",
+        "task_type",
+        "flash_mode",
+        "components",
+        "property_package",
     ],
 }
 
@@ -122,33 +124,39 @@ def validate_payload(payload: dict) -> bool:
     # Flash-specific checks
     if task_type == "flash":
         comps = payload.get("components", {})
-
-        # Accept dict format (new) or list format (old, for backward compat)
-        if isinstance(comps, dict):
-            comp_names = list(comps.keys())
-            comp_fracs = list(comps.values())
-        elif isinstance(comps, list):
-            comp_names = comps
-            feed = payload.get("feed_composition", {})
-            comp_fracs = list(feed.values())
-        else:
+        if not isinstance(comps, dict):
             print("[VALIDATION] 'components' must be a dict {name: mole_fraction}.")
             return False
 
-        if len(comp_names) < 1:
+        if len(comps) < 1:
             print("[VALIDATION] 'components' must contain at least one component.")
             return False
 
-        total = sum(comp_fracs)
+        total = sum(comps.values())
         if abs(total - 1.0) > 0.02:
             print(f"[VALIDATION] Component mole fractions sum to {total:.3f}, not 1.0")
             return False
 
-        # flash_pressure_Pa must be < pressure_Pa (if provided)
-        feed_p  = payload.get("pressure_Pa", 0)
-        flash_p = payload.get("flash_pressure_Pa", feed_p * 0.971)
-        if flash_p >= feed_p:
-            print("[VALIDATION] flash_pressure_Pa must be less than pressure_Pa.")
+        flash_mode = payload.get("flash_mode")
+
+        if flash_mode == "isothermal_PT_flash":
+            feed = payload.get("feed", {})
+            flash_drum = payload.get("flash_drum", {})
+
+            for field in ["temperature_C", "pressure_bar"]:
+                if field not in feed:
+                    print(f"[VALIDATION] Missing feed.{field} for isothermal_PT_flash.")
+                    return False
+                if field not in flash_drum:
+                    print(f"[VALIDATION] Missing flash_drum.{field} for isothermal_PT_flash.")
+                    return False
+
+            if flash_drum["pressure_bar"] >= feed["pressure_bar"]:
+                print("[VALIDATION] flash_drum.pressure_bar must be less than feed.pressure_bar.")
+                return False
+
+        else:
+            print(f"[VALIDATION] Unsupported flash_mode: '{flash_mode}'. Only 'isothermal_PT_flash' is supported for now.")
             return False
 
     print("[VALIDATION] Payload is valid. ✓")
@@ -176,13 +184,13 @@ def save_payload(payload: dict) -> str:
 
     elif task_type == "flash":
         comps = payload["components"]
-        # Accept both dict (new) and list (old) format
-        comp_names = list(comps.keys()) if isinstance(comps, dict) else comps
+        comp_names = list(comps.keys())
+        flash_mode = payload.get("flash_mode", "flash")
         comp_slug = "_".join(
-            c.lower().replace(" ", "_").replace("-", "_")
-            for c in comp_names
+            c.lower().replace(" ", "_").replace("-", "_") for c in comp_names
         )
-        filename = f"flash_{comp_slug}.json"
+        mode_slug = flash_mode.lower().replace(" ", "_")
+        filename = f"{mode_slug}_{comp_slug}.json"
 
     else:
         filename = f"task_{task_type}.json"
