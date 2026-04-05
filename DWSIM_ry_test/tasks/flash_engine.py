@@ -615,55 +615,40 @@ def _run_dwsim_isothermal_pt_flash(
 
     select_property_package(sim, pkg_tag)
 
-    # Enums must be imported AFTER init_dwsim loads the .NET DLLs
     from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
-    from DWSIM.UnitOperations import UnitOperations as DWSIMUnitOps
     from DWSIM.GlobalSettings import Settings
 
     # ── Material streams ────────────────────────────────────────────────────
-    feed_obj   = sim.AddObject(ObjectType.MaterialStream, 50,  300, "FEED" ).GetAsObject()
-    fdrum_obj  = sim.AddObject(ObjectType.MaterialStream, 300, 300, "FDRUM").GetAsObject()
-    vapor_obj  = sim.AddObject(ObjectType.MaterialStream, 550, 100, "V"    ).GetAsObject()
-    liquid_obj = sim.AddObject(ObjectType.MaterialStream, 550, 500, "L"    ).GetAsObject()
+    feed_obj   = sim.AddObject(ObjectType.MaterialStream, 50,  300, "FEED").GetAsObject()
+    vapor_obj  = sim.AddObject(ObjectType.MaterialStream, 400, 100, "V"   ).GetAsObject()
+    liquid_obj = sim.AddObject(ObjectType.MaterialStream, 400, 500, "L"   ).GetAsObject()
 
-    # ── Energy streams ──────────────────────────────────────────────────────
-    e1 = sim.AddObject(ObjectType.EnergyStream, 175, 500, "E1").GetAsObject()
-    e2 = sim.AddObject(ObjectType.EnergyStream, 425, 500, "E2").GetAsObject()
+    # ── Energy stream ───────────────────────────────────────────────────────
+    e1 = sim.AddObject(ObjectType.EnergyStream, 250, 500, "E1").GetAsObject()
 
-    # ── Unit operations ─────────────────────────────────────────────────────
-    # Use a Cooler to set the drum temperature (isothermal: same T as feed)
-    # and drop the pressure from feed_press to drum_press
-    cooler_uo = sim.AddObject(ObjectType.Cooler, 175, 300, "Cool-1").GetAsObject()
-    flash_uo  = sim.AddObject(ObjectType.Vessel,  425, 300, "Flash1").GetAsObject()
+    # ── Flash drum ──────────────────────────────────────────────────────────
+    flash_uo = sim.AddObject(ObjectType.Vessel, 250, 300, "Flash1").GetAsObject()
 
-    # ── Configure feed ──────────────────────────────────────────────────────
-    feed_obj.SetTemperature(feed_temp_K)
-    feed_obj.SetPressure(feed_press)
+    # ── Set feed to DRUM conditions (T and P define the flash equilibrium) ──
+    # For isothermal PT flash, we want VLE at drum_T and drum_P.
+    # The Vessel inherits T and P from the inlet stream.
+    feed_obj.SetTemperature(drum_temp_K)
+    feed_obj.SetPressure(drum_press)
     feed_obj.SetMolarFlow(feed_flow)
     for comp_name in comp_names:
         mole_frac = float(comp_dict.get(comp_name, 0.0))
         feed_obj.SetOverallCompoundMolarFlow(comp_name, mole_frac * feed_flow)
 
-    print(f"[flash_engine] Feed: {feed_temp_K-273.15:.1f} C, {feed_press/1e5:.2f} bar, {feed_flow*3600:.1f} mol/h")
+    print(f"[flash_engine] Flash conditions: {drum_temp_K-273.15:.1f} C, {drum_press/1e5:.2f} bar")
 
-    # ── Configure cooler to drop pressure and set drum temperature ──────────
-    cooler_uo.CalcMode = DWSIMUnitOps.Cooler.CalculationMode.OutletTemperature
-    cooler_uo.OutletTemperature = drum_temp_K
-    cooler_uo.PressureDrop = feed_press - drum_press
-
-    print(f"[flash_engine] Cooler: T_out={drum_temp_K-273.15:.1f} C, dP={( feed_press-drum_press)/1e5:.2f} bar")
-
-    # ── Wire: FEED → Cool-1 → FDRUM → Flash1 → V / L ──────────────────────
-    sim.ConnectObjects(feed_obj.GraphicObject,   cooler_uo.GraphicObject,  -1, -1)
-    sim.ConnectObjects(cooler_uo.GraphicObject,  fdrum_obj.GraphicObject,  -1, -1)
-    sim.ConnectObjects(e1.GraphicObject,         cooler_uo.GraphicObject,  -1, -1)
-    sim.ConnectObjects(fdrum_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
-    sim.ConnectObjects(flash_uo.GraphicObject,   vapor_obj.GraphicObject,  -1, -1)
-    sim.ConnectObjects(flash_uo.GraphicObject,   liquid_obj.GraphicObject, -1, -1)
-    sim.ConnectObjects(e2.GraphicObject,         flash_uo.GraphicObject,   -1, -1)
+    # ── Wire: FEED → Flash1 → V / L ─────────────────────────────────────────
+    sim.ConnectObjects(feed_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(e1.GraphicObject,        flash_uo.GraphicObject,   -1, -1)
     sim.AutoLayout()
 
-    # ── Solve ───────────────────────────────────────────────────────────────
+    # ── Solve ────────────────────────────────────────────────────────────────
     Settings.SolverMode = 0
     errors = interf.CalculateFlowsheet4(sim)
     if errors is not None and len(errors) > 0:
@@ -671,14 +656,19 @@ def _run_dwsim_isothermal_pt_flash(
 
     print("[flash_engine] isothermal_PT_flash solved successfully.")
 
-    # ── Extract results ─────────────────────────────────────────────────────
+    # ── Extract — report FEED as the overall feed info, V and L as products ─
     results = {
         "feed":             _extract_stream(feed_obj,   "FEED", comp_names),
-        "drum_inlet":       _extract_stream(fdrum_obj,  "FDRUM", comp_names),
         "vapor":            _extract_stream(vapor_obj,  "V",    comp_names),
         "liquid":           _extract_stream(liquid_obj, "L",    comp_names),
         "property_package": pkg_tag,
     }
+
+    # Manually patch FEED stream to show original feed conditions for clarity
+    results["feed"]["T_C"]    = round(feed_temp_K - 273.15, 4)
+    results["feed"]["T_K"]    = round(feed_temp_K, 4)
+    results["feed"]["P_Pa"]   = round(feed_press, 2)
+    results["feed"]["P_bar"]  = round(feed_press / 1e5, 4)
 
     os.makedirs(output_dir, exist_ok=True)
     tag = "_".join(comp_list)
@@ -772,7 +762,7 @@ def _mock_isothermal_pt_flash(
         return d
 
     results = {
-        "feed":             _s("FEED", feed_temp_K, feed_press,  1.0,    z,     feed_flow_mol_s),
+        "feed":             _s("FEED", feed_temp_K, feed_press,  0.0,    z,     feed_flow_mol_s),
         "vapor":            _s("V",    drum_temp_K,  drum_press, 1.0,    y_vap, feed_flow_mol_s * V_frac),
         "liquid":           _s("L",    drum_temp_K,  drum_press, 0.0,    x_liq, feed_flow_mol_s * (1 - V_frac)),
         "property_package": "MOCK (Rachford-Rice)",
@@ -857,7 +847,7 @@ def run_isothermal_pt_flash(
     print(f" ISOTHERMAL PT FLASH RESULTS | Property Package: {results.get('property_package','—')}")
     print(f" Feed → Flash1 → V / L  (no cooler, no valve)")
     print("=" * 72)
-    for key in ("feed", "vapor", "liquid"):
+    for key in ("feed", "cooler_out", "vapor", "liquid"):
         if key not in results:
             continue
         s = results[key]
@@ -869,9 +859,10 @@ def run_isothermal_pt_flash(
     v_flow = results.get("vapor", {}).get("molar_flow_molh", 0)
     l_flow = results.get("liquid", {}).get("molar_flow_molh", 0)
     if v_flow + l_flow > 0:
-        print(f"\n  Overall vapor fraction : {v_flow / (v_flow + l_flow):.4f}")
-        print(f"  V stream flow          : {v_flow:.2f} mol/h")
-        print(f"  L stream flow          : {l_flow:.2f} mol/h")
+        overall_vf = v_flow / (v_flow + l_flow)
+        print(f"\n  Overall vapor fraction (DWSIM): {overall_vf:.4f}")
+        print(f"  V stream flow                 : {v_flow:.2f} mol/h")
+        print(f"  L stream flow                 : {l_flow:.2f} mol/h")
     print("=" * 72 + "\n")
 
     return results
