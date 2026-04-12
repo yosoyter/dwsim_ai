@@ -32,7 +32,7 @@ SYSTEM_PROMPT_PATH = os.path.join(SCRIPT_DIR, "system_prompt.txt")
 # This is where Group 2's txy_engine.py looks for input files
 OUTPUT_EXAMPLES_DIR = os.path.join(SCRIPT_DIR, "..", "DWSIM_ry_test", "tasks", "examples")
 
-with open(SYSTEM_PROMPT_PATH, "r") as f:
+with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
 
 # =============================================================================

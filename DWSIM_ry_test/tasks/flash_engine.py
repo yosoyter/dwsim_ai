@@ -632,8 +632,8 @@ def _run_dwsim_isothermal_pt_flash(
     # ── Set feed to DRUM conditions (T and P define the flash equilibrium) ──
     # For isothermal PT flash, we want VLE at drum_T and drum_P.
     # The Vessel inherits T and P from the inlet stream.
-    feed_obj.SetTemperature(drum_temp_K)
-    feed_obj.SetPressure(drum_press)
+    feed_obj.SetTemperature(feed_temp_K)
+    feed_obj.SetPressure(feed_press)
     feed_obj.SetMolarFlow(feed_flow)
     for comp_name in comp_names:
         mole_frac = float(comp_dict.get(comp_name, 0.0))
@@ -643,8 +643,8 @@ def _run_dwsim_isothermal_pt_flash(
 
     # ── Wire: FEED → Flash1 → V / L ─────────────────────────────────────────
     sim.ConnectObjects(feed_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
-    sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
     sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
     sim.ConnectObjects(e1.GraphicObject,        flash_uo.GraphicObject,   -1, -1)
     sim.AutoLayout()
 
