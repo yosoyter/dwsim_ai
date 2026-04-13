@@ -30,7 +30,7 @@ STEP A — Always include these top-level fields:
 
 STEP B — Choose flash_mode based on what the user specifies:
   - "isothermal_PT_flash"  → user specifies both drum temperature AND drum pressure
-  - "adiabatic_flash"      → user specifies drum pressure only, no heat exchange (Q=0)
+  - "adiabatic_PT_flash"      → user specifies drum pressure only, no heat exchange (Q=0)
   - "dewpoint_flash"       → user specifies vapor composition and pressure, asks for dewpoint
   - "throttling_flash"     → user specifies upstream feed + downstream pressure after a valve
 
@@ -59,6 +59,29 @@ Rules for isothermal_PT_flash:
 - flash_drum.pressure_bar must be less than feed.pressure_bar
 - flow_kmol_h defaults to 100.0 if not specified
 
+For "adiabatic_PT_flash":
+{
+  "task_type": "flash",
+  "flash_mode": "adiabatic_PT_flash",
+  "components": {"Propane": 0.5, "n-Butane": 0.5},
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 60.0,
+    "pressure_bar": 12.0
+  },
+  "flash_drum": {
+    "pressure_bar": 6.0
+  },
+  "property_package": "Peng-Robinson"
+}
+
+Rules for adiabatic_PT_flash:
+- "feed" captures inlet stream conditions before the drum
+- "flash_drum" captures the drum pressure only
+- do not include flash_drum.temperature_C
+- flash_drum.pressure_bar must be less than feed.pressure_bar
+- flow_kmol_h defaults to 100.0 if not specified
+
 === OUTPUT RULES (STRICT) ===
 - Respond with ONLY a raw JSON object. No markdown, no code fences, no explanation, no preamble.
 - Your entire response must be parseable by Python's json.loads() with no preprocessing.
@@ -78,9 +101,11 @@ components (flash):
 - Mole fractions must sum to 1.0. If user gives percentages, divide by 100.
 - DWSIM compound names: "Hydrogen", "Methane", "Ethane", "Propane", "Benzene", "Toluene", "Ethanol", "Water", etc.
 
-feed / flash_drum (isothermal_PT_flash):
+feed / flash_drum (flash):
 - "feed.temperature_C" and "feed.pressure_bar" are the inlet stream conditions.
-- "flash_drum.temperature_C" and "flash_drum.pressure_bar" are the drum equilibrium conditions.
+- For "isothermal_PT_flash", "flash_drum.temperature_C" and "flash_drum.pressure_bar" are the drum equilibrium conditions.
+- For "adiabatic_PT_flash", include only "flash_drum.pressure_bar".
+- Do not include "flash_drum.temperature_C" for adiabatic_PT_flash.
 - Convert any temperatures in K to C by subtracting 273.15.
 - Convert any pressures in Pa to bar by dividing by 100000.
 - Convert any pressures in atm to bar by multiplying by 1.01325.
@@ -112,6 +137,9 @@ Output: {"task_type": "flash", "flash_mode": "isothermal_PT_flash", "components"
 
 User: "Isothermal flash drum for ethanol 40% and water 60%. Feed at 80 C and 3 bar, drum at 80 C and 1.013 bar."
 Output: {"task_type": "flash", "flash_mode": "isothermal_PT_flash", "components": {"Ethanol": 0.4, "Water": 0.6}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 80.0, "pressure_bar": 3.0}, "flash_drum": {"temperature_C": 80.0, "pressure_bar": 1.013}, "property_package": "NRTL"}
+
+User: "Adiabatic flash drum for a 50/50 propane and n-butane mixture. Feed is 100 kmol/h at 60 C and 12 bar. Drum pressure is 6 bar. Use Peng-Robinson."
+Output: {"task_type": "flash", "flash_mode": "adiabatic_PT_flash", "components": {"Propane": 0.5, "n-Butane": 0.5}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 60.0, "pressure_bar": 12.0}, "flash_drum": {"pressure_bar": 6.0}, "property_package": "Peng-Robinson"}
 
 === ERROR EXAMPLE ===
 User: "Txy for water"

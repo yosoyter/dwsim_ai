@@ -867,6 +867,199 @@ def run_isothermal_pt_flash(
 
     return results
 
+
+def _run_dwsim_adiabatic_pt_flash(
+    comp_list, comp_dict,
+    feed_temp_K, feed_press, feed_flow,
+    drum_press,
+    pkg_tag, dwsim_path, output_dir
+) -> dict:
+    import pythoncom
+    pythoncom.CoInitialize()
+
+    from DWSIM_ry_test.lib.dwsim_core import (
+        init_dwsim, create_flowsheet, select_property_package, save_flowsheet,
+    )
+
+    interf = init_dwsim(dwsim_path)
+    sim = create_flowsheet(interf)
+
+    for comp in comp_list:
+        sim.AddCompound(comp)
+    comp_names = list(sim.SelectedCompounds.Keys)
+
+    select_property_package(sim, pkg_tag)
+
+    from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
+    from DWSIM.GlobalSettings import Settings
+    from DWSIM.UnitOperations import UnitOperations as DWSIMUnitOps
+
+    feed_obj   = sim.AddObject(ObjectType.MaterialStream,  50, 300, "FEED").GetAsObject()
+    valve_out  = sim.AddObject(ObjectType.MaterialStream, 250, 300, "VFEED").GetAsObject()
+    vapor_obj  = sim.AddObject(ObjectType.MaterialStream, 500, 100, "V").GetAsObject()
+    liquid_obj = sim.AddObject(ObjectType.MaterialStream, 500, 500, "L").GetAsObject()
+
+    # e1 = sim.AddObject(ObjectType.EnergyStream, 150, 500, "E1").GetAsObject()
+    e2 = sim.AddObject(ObjectType.EnergyStream, 375, 500, "E2").GetAsObject()
+
+    valve_uo = sim.AddObject(ObjectType.Valve, 150, 300, "Valve1").GetAsObject()
+    flash_uo = sim.AddObject(ObjectType.Vessel, 375, 300, "Flash1").GetAsObject()
+
+    feed_obj.SetTemperature(feed_temp_K)
+    feed_obj.SetPressure(feed_press)
+    feed_obj.SetMolarFlow(feed_flow)
+    for comp_name in comp_names:
+        mole_frac = float(comp_dict.get(comp_name, 0.0))
+        feed_obj.SetOverallCompoundMolarFlow(comp_name, mole_frac * feed_flow)
+
+    valve_uo.CalcMode = DWSIMUnitOps.Valve.CalculationMode.OutletPressure
+    valve_uo.OutletPressure = drum_press
+
+    sim.ConnectObjects(feed_obj.GraphicObject,  valve_uo.GraphicObject,   -1, -1)
+    # sim.ConnectObjects(e1.GraphicObject,        valve_uo.GraphicObject,   -1, -1)
+    sim.ConnectObjects(valve_uo.GraphicObject,  valve_out.GraphicObject,  -1, -1)
+    sim.ConnectObjects(valve_out.GraphicObject, flash_uo.GraphicObject,   -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(e2.GraphicObject,        flash_uo.GraphicObject,   -1, -1)
+
+    sim.AutoLayout()
+
+    Settings.SolverMode = 0
+    errors = interf.CalculateFlowsheet4(sim)
+    if errors is not None and len(errors) > 0:
+        raise RuntimeError("[flash_engine] Solver errors:\n" + "\n".join(str(e) for e in errors))
+
+    print("[flash_engine] adiabatic_PT_flash solved successfully.")
+
+    results = {
+        "feed":             _extract_stream(feed_obj,   "FEED",  comp_names),
+        "vapor":            _extract_stream(vapor_obj,  "V",     comp_names),
+        "liquid":           _extract_stream(liquid_obj, "L",     comp_names),
+        "property_package": pkg_tag,
+    }
+
+    results["feed"]["T_C"]   = round(feed_temp_K - 273.15, 4)
+    results["feed"]["T_K"]   = round(feed_temp_K, 4)
+    results["feed"]["P_Pa"]  = round(feed_press, 2)
+    results["feed"]["P_bar"] = round(feed_press / 1e5, 4)
+
+    os.makedirs(output_dir, exist_ok=True)
+    tag = "_".join(comp_list)
+    save_flowsheet(interf, sim, os.path.join(output_dir, f"adiabatic_pt_flash_{tag}.dwxmz"))
+    return results
+
+def _mock_adiabatic_pt_flash(
+    comp_list, comp_dict,
+    feed_temp_K, feed_press,
+    drum_press,
+    feed_flow_mol_s
+) -> dict:
+    """
+    Simple placeholder mock:
+    approximate adiabatic flash by assuming the flash temperature
+    drops 15 C from feed, then reuse the isothermal mock.
+    Replace later with enthalpy-based iteration if desired.
+    """
+    drum_temp_K = feed_temp_K - 15.0
+
+    results = _mock_isothermal_pt_flash(
+        comp_list, comp_dict,
+        feed_temp_K, feed_press,
+        drum_temp_K, drum_press,
+        feed_flow_mol_s
+    )
+    results["property_package"] = "MOCK (adiabatic PT flash)"
+    return results
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADIABATIC PT FLASH — Public entry point
+# ─────────────────────────────────────────────────────────────────────────────
+def run_adiabatic_pt_flash(
+    task: dict,
+    dwsim_path: str = DWSIM_PATH,
+    output_dir: str = None,
+) -> dict:
+    """
+    Run an adiabatic PT flash:
+    - feed enters at specified feed T and P
+    - drum pressure is specified
+    - drum temperature is solved by the flash from energy balance (adiabatic)
+    """
+
+    if output_dir is None:
+        output_dir = OUTPUT_DIR
+
+    comp_list = list(task["components"].keys())
+    comp_dict = {k: float(v) for k, v in task["components"].items()}
+    feed = task["feed"]
+    drum = task["flash_drum"]
+
+    feed_flow_mol_s = float(feed.get("flow_kmol_h", 100.0)) * 1000 / 3600
+    feed_temp_K = float(feed["temperature_C"]) + 273.15
+    feed_press = float(feed["pressure_bar"]) * 1e5
+    drum_press = float(drum["pressure_bar"]) * 1e5
+
+    raw_pkg = task.get("property_package", "auto")
+    pkg_tag = _normalize_package(raw_pkg) if raw_pkg != "auto" else _auto_select_package(comp_list)
+
+    print(f"\n[flash_engine] ── adiabatic_PT_flash ───────────────────────────")
+    print(f"[flash_engine] Components  : {comp_list}")
+    print(f"[flash_engine] Feed        : {feed['temperature_C']} C, {feed['pressure_bar']} bar")
+    print(f"[flash_engine] Drum P      : {drum['pressure_bar']} bar")
+    print(f"[flash_engine] Package     : {pkg_tag}")
+
+    dwsim_ready = DWSIM_AVAILABLE and os.path.isdir(dwsim_path)
+
+    if dwsim_ready:
+        results = _run_dwsim_adiabatic_pt_flash(
+            comp_list, comp_dict,
+            feed_temp_K, feed_press, feed_flow_mol_s,
+            drum_press,
+            pkg_tag, dwsim_path, output_dir
+        )
+    else:
+        if DWSIM_AVAILABLE and not os.path.isdir(dwsim_path):
+            print(f"[flash_engine] DWSIM path not found: {dwsim_path} — using mock.")
+        results = _mock_adiabatic_pt_flash(
+            comp_list, comp_dict,
+            feed_temp_K, feed_press,
+            drum_press,
+            feed_flow_mol_s
+        )
+
+    os.makedirs(output_dir, exist_ok=True)
+    tag = "_".join(comp_list)
+    rows = [results[k] for k in ("feed", "vapor", "liquid") if k in results]
+    df = pd.DataFrame(rows)
+    csv_path = os.path.join(output_dir, f"adiabatic_pt_flash_{tag}.csv")
+    df.to_csv(csv_path, index=False)
+    print(f"[flash_engine] CSV saved: {csv_path}")
+
+    print("\n" + "=" * 72)
+    print(f" ADIABATIC PT FLASH RESULTS | Property Package: {results.get('property_package','—')}")
+    print(f" Feed → Valve/flash to drum P → Flash1 → V / L  (Q = 0)")
+    print("=" * 72)
+    for key in ("feed", "vapor", "liquid"):
+        if key not in results:
+            continue
+        s = results[key]
+        print(f"\n  {s['stream']:<6}  T={s['T_C']:.2f} C  P={s['P_bar']:.3f} bar  "
+              f"V_frac={s['vapor_fraction']:.4f}  flow={s['molar_flow_molh']:.2f} mol/h")
+        for k, v in s.items():
+            if k.startswith("x_"):
+                print(f"    {k:<22} = {v:.6f}")
+    v_flow = results.get("vapor", {}).get("molar_flow_molh", 0)
+    l_flow = results.get("liquid", {}).get("molar_flow_molh", 0)
+    if v_flow + l_flow > 0:
+        overall_vf = v_flow / (v_flow + l_flow)
+        print(f"\n  Overall vapor fraction (DWSIM): {overall_vf:.4f}")
+        print(f"  V stream flow                 : {v_flow:.2f} mol/h")
+        print(f"  L stream flow                 : {l_flow:.2f} mol/h")
+    print("=" * 72 + "\n")
+
+    return results
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  MAIN PUBLIC FUNCTION
 # ─────────────────────────────────────────────────────────────────────────────
@@ -897,6 +1090,9 @@ def run_flash_task(
     # Route to mode-specific handler
     if flash_mode == "isothermal_PT_flash":
         return run_isothermal_pt_flash(task, dwsim_path=dwsim_path, output_dir=output_dir)
+
+    if flash_mode == "adiabatic_PT_flash":
+        return run_adiabatic_pt_flash(task, dwsim_path=dwsim_path, output_dir=output_dir)
 
     # Legacy path — original flat-schema flash (Feed→Cooler→Flash)
     validate_flash_task(task)

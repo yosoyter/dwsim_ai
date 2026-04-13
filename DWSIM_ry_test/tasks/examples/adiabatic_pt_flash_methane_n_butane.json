@@ -1,0 +1,17 @@
+{
+  "task_type": "flash",
+  "flash_mode": "adiabatic_PT_flash",
+  "components": {
+    "Methane": 0.5,
+    "n-Butane": 0.5
+  },
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 80.0,
+    "pressure_bar": 20.0
+  },
+  "flash_drum": {
+    "pressure_bar": 5.0
+  },
+  "property_package": "PR"
+}

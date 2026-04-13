@@ -55,6 +55,19 @@ REQUIRED_FIELDS = {
     ],
 }
 
+FLASH_MODE_REQUIRED_FIELDS = {
+    "isothermal_PT_flash": {
+        "top": ["components", "property_package", "feed", "flash_drum"],
+        "feed": ["temperature_C", "pressure_bar"],
+        "flash_drum": ["temperature_C", "pressure_bar"],
+    },
+    "adiabatic_PT_flash": {
+        "top": ["components", "property_package", "feed", "flash_drum"],
+        "feed": ["temperature_C", "pressure_bar"],
+        "flash_drum": ["pressure_bar"],
+    },
+}
+
 # =============================================================================
 # STEP 1: Call the LLM
 # =============================================================================
@@ -139,24 +152,42 @@ def validate_payload(payload: dict) -> bool:
 
         flash_mode = payload.get("flash_mode")
 
+        if flash_mode not in FLASH_MODE_REQUIRED_FIELDS:
+            print(f"[VALIDATION] Unknown flash_mode: '{flash_mode}'")
+            return False
+
+        rules = FLASH_MODE_REQUIRED_FIELDS[flash_mode]
+
+        for f in rules["top"]:
+            if f not in payload:
+                print(f"[VALIDATION] Missing flash field: '{f}'")
+                return False
+
+        feed = payload.get("feed", {})
+        for f in rules.get("feed", []):
+            if f not in feed:
+                print(f"[VALIDATION] Missing feed field for '{flash_mode}': '{f}'")
+                return False
+
+        drum = payload.get("flash_drum", {})
+        for f in rules.get("flash_drum", []):
+            if f not in drum:
+                print(f"[VALIDATION] Missing flash_drum field for '{flash_mode}': '{f}'")
+                return False
+
+        # Mode-specific consistency checks
         if flash_mode == "isothermal_PT_flash":
-            feed = payload.get("feed", {})
-            flash_drum = payload.get("flash_drum", {})
+            if drum["pressure_bar"] >= feed["pressure_bar"]:
+                print("[VALIDATION] flash_drum.pressure_bar must be less than feed.pressure_bar.")
+                return False
 
-            for field in ["temperature_C", "pressure_bar"]:
-                if field not in feed:
-                    print(f"[VALIDATION] Missing feed.{field} for isothermal_PT_flash.")
-                    return False
-                if field not in flash_drum:
-                    print(f"[VALIDATION] Missing flash_drum.{field} for isothermal_PT_flash.")
-                    return False
-
-            if flash_drum["pressure_bar"] >= feed["pressure_bar"]:
+        elif flash_mode == "adiabatic_PT_flash":
+            if drum["pressure_bar"] >= feed["pressure_bar"]:
                 print("[VALIDATION] flash_drum.pressure_bar must be less than feed.pressure_bar.")
                 return False
 
         else:
-            print(f"[VALIDATION] Unsupported flash_mode: '{flash_mode}'. Only 'isothermal_PT_flash' is supported for now.")
+            print(f"[VALIDATION] Unsupported flash_mode: '{flash_mode}'.")
             return False
 
     print("[VALIDATION] Payload is valid. ✓")
