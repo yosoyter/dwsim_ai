@@ -19,8 +19,8 @@ REM    2. set ANTHROPIC_API_KEY=sk-ant-api03-...
 REM    3. pip install anthropic pandas numpy matplotlib
 REM
 REM  LLM FILES (as of 2025-03-29):
-REM    LLM/orchestrator_0329.py
-REM    LLM/system_prompt_0329.txt   (read automatically by orchestrator_0329.py)
+REM    LLM/orchestrator_ft.py
+REM    LLM/system_prompt_ft.txt   (read automatically by orchestrator_ft.py)
 REM ============================================================
 
 REM ── 1. Check API key ─────────────────────────────────────────
@@ -51,9 +51,9 @@ echo ============================================================
 echo.
 
 IF "%~1"=="" (
-    python LLM/orchestrator_0329.py
+    python LLM/orchestrator_ft.py
 ) ELSE (
-    echo %~1 | python LLM/orchestrator_0329.py
+    echo %~1 | python LLM/orchestrator_ft.py
 )
 
 IF ERRORLEVEL 1 (
@@ -111,7 +111,7 @@ IF /I "%TASK_TYPE%"=="txy" (
     echo.
     echo [ERROR] Unknown task_type: "%TASK_TYPE%"
     echo         Supported types: txy, flash
-    echo         Check LLM/system_prompt_0329.txt to ensure it outputs one of these.
+    echo         Check LLM/system_prompt_ft.txt to ensure it outputs one of these.
     exit /b 1
 )
 
