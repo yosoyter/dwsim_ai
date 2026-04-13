@@ -28,7 +28,7 @@ import anthropic
 # =============================================================================
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SYSTEM_PROMPT_PATH = os.path.join(SCRIPT_DIR, "system_prompt_0329.txt")
+SYSTEM_PROMPT_PATH = os.path.join(SCRIPT_DIR, "system_prompt_ft.txt")
 
 # This is where txy_engine.py and flash_engine.py look for input files
 OUTPUT_EXAMPLES_DIR = os.path.join(
