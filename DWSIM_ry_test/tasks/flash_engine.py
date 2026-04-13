@@ -62,7 +62,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
 sys.path.insert(0, _ROOT)
 
-DWSIM_PATH = r"C:\Users\terrBear\AppData\Local\DWSIM"
+DWSIM_PATH = r"C:\Users\terrbear\AppData\Local\DWSIM"
 OUTPUT_DIR  = os.path.join(_ROOT, "output")
 
 POLAR_COMPONENTS = {
@@ -521,7 +521,7 @@ def _mock_flash(task: dict) -> dict:
         return d
 
     results = {
-        "feed":       _s("FEED",  feed_temp,   feed_press,  1.0,    z,     feed_mols),
+        "feed":       _s("FEED",  feed_temp,   feed_press,  0.0,    z,     feed_mols),
         "cooler_out": _s("FFEED", cooler_temp, flash_press, V_frac, z,     feed_mols),
         "vapor":      _s("V",     cooler_temp, flash_press, 1.0,    y_vap, feed_mols * V_frac),
         "liquid":     _s("L",     cooler_temp, flash_press, 0.0,    x_liq, feed_mols * (1 - V_frac)),
@@ -579,9 +579,9 @@ def print_flash_summary(results: dict) -> None:
     if v and l:
         vfh = v["molar_flow_molh"]
         lfh = l["molar_flow_molh"]
-        vf  = results["cooler_out"]["vapor_fraction"]
+        #vf  = results["cooler_out"]["vapor_fraction"]
         print(f"\n  ── Separation summary ───────────────────────────────")
-        print(f"     Overall vapor fraction  : {vf:.4f}")
+        #print(f"     Overall vapor fraction  : {vf:.4f}")
         print(f"     V stream flow           : {vfh:.2f} mol/h")
         print(f"     L stream flow           : {lfh:.2f} mol/h")
         print(f"     V/(V+L) check           : {vfh/(vfh+lfh):.4f}")
@@ -632,8 +632,8 @@ def _run_dwsim_isothermal_pt_flash(
     # ── Set feed to DRUM conditions (T and P define the flash equilibrium) ──
     # For isothermal PT flash, we want VLE at drum_T and drum_P.
     # The Vessel inherits T and P from the inlet stream.
-    feed_obj.SetTemperature(feed_temp_K)
-    feed_obj.SetPressure(feed_press)
+    feed_obj.SetTemperature(drum_temp_K)
+    feed_obj.SetPressure(drum_press)
     feed_obj.SetMolarFlow(feed_flow)
     for comp_name in comp_names:
         mole_frac = float(comp_dict.get(comp_name, 0.0))
@@ -643,8 +643,8 @@ def _run_dwsim_isothermal_pt_flash(
 
     # ── Wire: FEED → Flash1 → V / L ─────────────────────────────────────────
     sim.ConnectObjects(feed_obj.GraphicObject,  flash_uo.GraphicObject,   -1, -1)
-    sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
     sim.ConnectObjects(flash_uo.GraphicObject,  vapor_obj.GraphicObject,  -1, -1)
+    sim.ConnectObjects(flash_uo.GraphicObject,  liquid_obj.GraphicObject, -1, -1)
     sim.ConnectObjects(e1.GraphicObject,        flash_uo.GraphicObject,   -1, -1)
     sim.AutoLayout()
 

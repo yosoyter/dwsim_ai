@@ -61,7 +61,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.abspath(os.path.join(_HERE, "..", ".."))
 sys.path.insert(0, _ROOT)
 
-DWSIM_PATH = r"C:\Users\terrBear\AppData\Local\DWSIM"
+DWSIM_PATH = r"C:\Users\terrbear\AppData\Local\DWSIM"
 
 POLAR_COMPONENTS = {
     "WATER", "ETHANOL", "METHANOL", "ACETONE", "ACETIC ACID",
