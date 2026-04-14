@@ -27,6 +27,8 @@ results = {
         "P_Pa":             float,
         "P_bar":            float,
         "molar_flow_molh":  float,    # mol/h
+        "mass_flow_kgh":    float,    # kg/h
+        "enthalpy_kJkmol":  float,    # kJ/kmol  (negative = exothermic reference)
         "vapor_fraction":   float,
         "x_<CompName>":     float,    # one key per component, e.g. "x_Propane"
         ...
@@ -39,6 +41,8 @@ results = {
         "P_Pa":             float,
         "P_bar":            float,
         "molar_flow_molh":  float,
+        "mass_flow_kgh":    float,    # kg/h
+        "enthalpy_kJkmol":  float,    # kJ/kmol  (negative = exothermic reference)
         "vapor_fraction":   float,    # will be 1.0 for a pure vapor stream
         "x_<CompName>":     float,    # mole fraction in vapor phase
         ...
@@ -51,6 +55,8 @@ results = {
         "P_Pa":             float,
         "P_bar":            float,
         "molar_flow_molh":  float,
+        "mass_flow_kgh":    float,    # kg/h
+        "enthalpy_kJkmol":  float,    # kJ/kmol  (negative = exothermic reference)
         "vapor_fraction":   float,    # will be 0.0 for a pure liquid stream
         "x_<CompName>":     float,    # mole fraction in liquid phase
         ...

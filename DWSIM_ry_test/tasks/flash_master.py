@@ -87,20 +87,22 @@ def _auto_select_package(comp_list: list) -> str:
 
 def _extract_stream(stream_obj, stream_name: str, comp_names: list) -> dict:
     """
-    Pull T, P, molar flow, vapor fraction, and per-component mole fractions
-    from a solved DWSIM MaterialStream.
+    Pull T, P, molar flow, mass flow, enthalpy, vapor fraction,
+    and per-component mole fractions from a solved DWSIM MaterialStream.
 
     Returns a flat dict:
     {
-        "stream":           "V",
-        "T_K":              333.15,
-        "T_C":              60.0,
-        "P_Pa":             600000.0,
-        "P_bar":            6.0,
-        "molar_flow_molh":  62340.0,
-        "vapor_fraction":   1.0,
-        "x_Propane":        0.72,
-        "x_n-Butane":       0.28
+        "stream":             "V",
+        "T_K":                333.15,
+        "T_C":                60.0,
+        "P_Pa":               600000.0,
+        "P_bar":              6.0,
+        "molar_flow_molh":    62340.0,
+        "mass_flow_kgh":      2741.2,
+        "enthalpy_kJkmol":   -84321.4,
+        "vapor_fraction":     1.0,
+        "x_Propane":          0.72,
+        "x_n-Butane":         0.28
     }
     """
     def _get(val):
@@ -115,16 +117,19 @@ def _extract_stream(stream_obj, stream_name: str, comp_names: list) -> dict:
                 return 0.0
 
     p0 = stream_obj.Phases[0].Properties
+    # print(f"[DEBUG enthalpy] {stream_name}: raw = {p0.enthalpy}")
     p2 = stream_obj.Phases[2].Properties
 
     result = {
-        "stream":          stream_name,
-        "T_K":             round(_get(p0.temperature), 4),
-        "T_C":             round(_get(p0.temperature) - 273.15, 4),
-        "P_Pa":            round(_get(p0.pressure), 2),
-        "P_bar":           round(_get(p0.pressure) / 1e5, 4),
-        "molar_flow_molh": round(_get(p0.molarflow) * 3600, 4),
-        "vapor_fraction":  round(_get(p2.molarfraction), 6),
+        "stream":           stream_name,
+        "T_K":              round(_get(p0.temperature), 4),
+        "T_C":              round(_get(p0.temperature) - 273.15, 4),
+        "P_Pa":             round(_get(p0.pressure), 2),
+        "P_bar":            round(_get(p0.pressure) / 1e5, 4),
+        "molar_flow_molh":  round(_get(p0.molarflow) * 3600, 4),
+        "mass_flow_kgh":    round(_get(p0.massflow) * 3600, 4),
+        "enthalpy_kJkmol":  round(_get(p0.enthalpy) * 1000, 4),
+        "vapor_fraction":   round(_get(p2.molarfraction), 6),
     }
 
     for comp_name in comp_names:
@@ -310,7 +315,8 @@ def run_flash_master(task: dict, output_block_fn, output_dir: str = OUTPUT_DIR):
         "valve_out":        stream dict  ← adiabatic only, else None
     }
     Each stream dict keys: stream, T_K, T_C, P_Pa, P_bar,
-                           molar_flow_molh, vapor_fraction, x_<CompName>, ...
+                           molar_flow_molh, mass_flow_kgh,
+                           enthalpy_kJkmol, vapor_fraction, x_<CompName>, ...
     """
     import pythoncom
     pythoncom.CoInitialize()
