@@ -59,11 +59,12 @@ def get_task_json(user_question: str) -> dict | None:
     if payload is None:
         return None
 
-    if payload.get("task_type") != "flash":
-        print(f"[llm2] task_type is '{payload.get('task_type')}' — "
-              "LLM #2 only supports flash tasks. "
-              "For txy, use orchestrator_ft.py directly.")
-        return None
+    # reject tasks that are not flash
+    # if payload.get("task_type") != "flash":
+    #     print(f"[llm2] task_type is '{payload.get('task_type')}' — "
+    #           "LLM #2 only supports flash tasks. "
+    #           "For txy, use orchestrator_ft.py directly.")
+    #     return None
 
     return payload
 
@@ -220,6 +221,16 @@ def run_full_pipeline(user_question: str) -> None:
     # Attach original user question to task JSON for LLM #2 context
     task_json["user_request"] = user_question
 
+    # ── Txy: no code generation needed — route directly to txy_engine ─────────
+    if task_json.get("task_type") == "txy":
+        from DWSIM_ry_test.tasks.txy_engine import run_txy_task
+        print("\n[llm2] Txy task detected — routing to txy_engine (no code generation).")
+        df = run_txy_task(task_json, temp_unit="C")
+        print(f"\n[llm2] Txy complete. {len(df)} envelope points computed.")
+        print(f"       Plot + CSV saved to output/")
+        print("\n[llm2] Pipeline complete.")
+        return
+
     # ── Step 2: LLM #2 ────────────────────────────────────────────────────────
     generated_code = generate_output_block_code(user_question, task_json)
 
@@ -247,13 +258,12 @@ def run_full_pipeline(user_question: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("\nDWSIM-AI — LLM #2 Flash Pipeline")
-    print("Supports: isothermal_PT_flash, adiabatic_PT_flash\n")
+    print("DWSIM-AI — Unified Pipeline (Flash + Txy)")
+    print("Supports: isothermal_PT_flash, adiabatic_PT_flash, txy\n")
     print("Example prompts:")
     print('  "Flash a 50/50 propane/n-butane mix at 60C and 12 bar, drum at 6 bar."')
-    print('  "What are the vapor and liquid compositions after an adiabatic flash')
-    print('   of propane 30% / n-butane 70% from 20 bar down to 3 bar?"')
-    print('  "Isothermal flash of ethanol/water 40/60 at 80C. Save results to CSV."')
+    print('  "Txy diagram for ethanol and water at 1 atm."')
+    print('  "Phase envelope for benzene and toluene at 2 bar."')
     print()
 
     user_input = input("Your question: ").strip()
