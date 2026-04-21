@@ -1,0 +1,18 @@
+{
+  "task_type": "heat",
+  "heat_mode": "heater",
+  "components": {
+    "Propane": 0.5,
+    "n-Butane": 0.5
+  },
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 60.0,
+    "pressure_bar": 14.0
+  },
+  "outlet": {
+    "temperature_C": 120.0,
+    "pressure_drop_bar": 0.0
+  },
+  "property_package": "PR"
+}

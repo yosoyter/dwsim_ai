@@ -230,6 +230,28 @@ def run_full_pipeline(user_question: str) -> None:
         print(f"       Plot + CSV saved to output/")
         print("\n[llm2] Pipeline complete.")
         return
+    
+    # ── Heat: route to heat_master with LLM #2 code generation ───────────────
+    if task_json.get("task_type") == "heat":
+        print("\n[llm2] Heat task detected — generating output block for heater/cooler.")
+        generated_code = generate_output_block_code(user_question, task_json)
+
+        print("\n[LLM #2] Generated output_block code:")
+        print("-" * 40)
+        print(generated_code)
+        print("-" * 40)
+
+        if not validate_output_block(generated_code):
+            print("[llm2] Aborting: generated code failed safety check.")
+            return
+
+        output_block_fn = build_output_block_fn(generated_code)
+
+        from DWSIM_ry_test.tasks.heat_master import run_heat_master
+        run_heat_master(task_json, output_block_fn)
+
+        print("\n[llm2] Pipeline complete.")
+        return
 
     # ── Step 2: LLM #2 ────────────────────────────────────────────────────────
     generated_code = generate_output_block_code(user_question, task_json)

@@ -53,6 +53,14 @@ REQUIRED_FIELDS = {
         "components",
         "property_package",
     ],
+    "heat": [
+        "task_type",
+        "heat_mode",
+        "components",
+        "feed",
+        "outlet",
+        "property_package",
+    ],
 }
 
 FLASH_MODE_REQUIRED_FIELDS = {
@@ -190,6 +198,35 @@ def validate_payload(payload: dict) -> bool:
             print(f"[VALIDATION] Unsupported flash_mode: '{flash_mode}'.")
             return False
 
+    # Heat-specific checks
+    if task_type == "heat":
+        heat_mode = payload.get("heat_mode")
+        if heat_mode not in ("heater", "cooler"):
+            print(f"[VALIDATION] heat_mode must be 'heater' or 'cooler', got: '{heat_mode}'")
+            return False
+
+        feed = payload.get("feed", {})
+        outlet = payload.get("outlet", {})
+
+        for f in ("temperature_C", "pressure_bar"):
+            if f not in feed:
+                print(f"[VALIDATION] Missing feed field for heat task: '{f}'")
+                return False
+
+        if "temperature_C" not in outlet:
+            print("[VALIDATION] Missing outlet.temperature_C for heat task")
+            return False
+
+        comps = payload.get("components", {})
+        if not isinstance(comps, dict) or len(comps) < 1:
+            print("[VALIDATION] 'components' must be a non-empty dict for heat task.")
+            return False
+
+        total = sum(comps.values())
+        if abs(total - 1.0) > 0.02:
+            print(f"[VALIDATION] Component mole fractions sum to {total:.3f}, not 1.0")
+            return False
+
     print("[VALIDATION] Payload is valid. ✓")
     return True
 
@@ -222,6 +259,15 @@ def save_payload(payload: dict) -> str:
         )
         mode_slug = flash_mode.lower().replace(" ", "_")
         filename = f"{mode_slug}_{comp_slug}.json"
+
+    elif task_type == "heat":
+        comps = payload["components"]
+        comp_names = list(comps.keys())
+        heat_mode = payload.get("heat_mode", "heat")
+        comp_slug = "_".join(
+            c.lower().replace(" ", "_").replace("-", "_") for c in comp_names
+        )
+        filename = f"{heat_mode}_{comp_slug}.json"
 
     else:
         filename = f"task_{task_type}.json"

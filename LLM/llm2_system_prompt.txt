@@ -15,6 +15,11 @@ Your code becomes the body of this function. It will be exec()'d by the pipeline
 
 === THE RESULTS DICT ===
 
+NOTE: The results dict structure varies by task_type.
+For flash tasks, results contains: flash_mode, components, feed, vapor, liquid, valve_out.
+For heat tasks, results contains: heat_mode, components, feed, outlet, duty.
+The task JSON you receive will tell you which type this is.
+
 results = {
     "flash_mode":       str,          # "isothermal_PT_flash" or "adiabatic_PT_flash"
     "property_package": str,          # e.g. "PR", "NRTL"
@@ -72,6 +77,45 @@ results = {
         "vapor_fraction":   float,
         "x_<CompName>":     float,
         ...
+    }
+}
+
+For heat tasks, the results dict is:
+results = {
+    "heat_mode":        str,          # "heater" or "cooler"
+    "property_package": str,
+    "components":       list[str],
+
+    "feed": {
+        "stream":           "FEED",
+        "T_K":              float,
+        "T_C":              float,
+        "P_Pa":             float,
+        "P_bar":            float,
+        "molar_flow_molh":  float,
+        "mass_flow_kgh":    float,
+        "enthalpy_kJkmol":  float,
+        "vapor_fraction":   float,
+        "x_<CompName>":     float,
+    },
+
+    "outlet": {
+        "stream":           "OUT",
+        "T_K":              float,
+        "T_C":              float,
+        "P_Pa":             float,
+        "P_bar":            float,
+        "molar_flow_molh":  float,
+        "mass_flow_kgh":    float,
+        "enthalpy_kJkmol":  float,
+        "vapor_fraction":   float,
+        "x_<CompName>":     float,
+    },
+
+    "duty": {
+        "duty_kW":  float,   # positive = heat added (heater), negative = heat removed (cooler)
+        "duty_kJh": float,
+        "duty_MWh": float,
     }
 }
 
