@@ -231,12 +231,12 @@ def build_cooler(
 #    COLD_IN → [HX] → COLD_OUT
 # ─────────────────────────────────────────────────────────────────────────────
 
-# DWSIM HeatExchanger calculation modes
-HX_CALC_MODES = {
-    "hot_outlet_T":   0,   # specify hot-side outlet temperature
-    "cold_outlet_T":  1,   # specify cold-side outlet temperature
-    "area":           2,   # specify heat transfer area + U
-    "duty":           3,   # specify heat duty directly
+# DWSIM HeatExchanger calculation mode integers
+HX_CALC_MODE_KEYS = {
+    "hot_outlet_T":  0,
+    "cold_outlet_T": 1,
+    "area":          2,
+    "duty":          3,
 }
 
 def build_hx(
@@ -285,21 +285,15 @@ def build_hx(
          .cold_inlet_stream  — cold-side inlet  MaterialStream
          .cold_outlet_stream — cold-side outlet MaterialStream
 
-    Port indices for explicit wiring:
-         hot  inlet  → port 0
-         hot  outlet → port 1
-         cold inlet  → port 2
-         cold outlet → port 3
-
-    Wiring example:
+    Wiring example (use -1 for all port indices — auto-detect):
         sim.ConnectObjects(hot_feed.GraphicObject,
-                           ns.obj.GraphicObject,              0,  0)
+                           ns.obj.GraphicObject,               -1, -1)
         sim.ConnectObjects(ns.obj.GraphicObject,
-                           ns.hot_outlet_stream.GraphicObject, 1, -1)
+                           ns.hot_outlet_stream.GraphicObject, -1, -1)
         sim.ConnectObjects(cold_feed.GraphicObject,
-                           ns.obj.GraphicObject,              -1,  2)
+                           ns.obj.GraphicObject,               -1, -1)
         sim.ConnectObjects(ns.obj.GraphicObject,
-                           ns.cold_outlet_stream.GraphicObject, 3, -1)
+                           ns.cold_outlet_stream.GraphicObject,-1, -1)
     """
     from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
     from DWSIM.UnitOperations import UnitOperations as DWSIMUnitOps
@@ -308,13 +302,13 @@ def build_hx(
         ObjectType.HeatExchanger, x_pos, y_pos, name
     ).GetAsObject()
 
-    # Set calc mode
-    if calc_mode not in HX_CALC_MODES:
+    # Set calc mode — use SetCalculationMode() which accepts int directly
+    if calc_mode not in HX_CALC_MODE_KEYS:
         raise ValueError(
             f"[heat_exchanger] Unknown calc_mode '{calc_mode}'. "
-            f"Valid: {list(HX_CALC_MODES.keys())}"
+            f"Valid: {list(HX_CALC_MODE_KEYS.keys())}"
         )
-    hx_obj.CalcMode = HX_CALC_MODES[calc_mode]
+    hx_obj.SetCalculationMode(HX_CALC_MODE_KEYS[calc_mode])
 
     # Set operating parameters based on mode
     if calc_mode == "hot_outlet_T":
@@ -421,10 +415,16 @@ def hx_stream_results(stream_obj, stream_name: str, comp_names: list) -> dict:
     return result
 
 
-def hx_duty_results(hx_obj, inlet_stream_results: dict = None, outlet_stream_results: dict = None) -> dict:
+def hx_duty_results(hx_obj) -> dict:
     """
-    Compute heat duty from stream enthalpy difference (most reliable method).
-    Falls back to DeltaQ if stream results not provided.
+    Extract heat duty and LMTD from a solved Heater, Cooler, or HeatExchanger object.
+
+    Returns
+    -------
+    dict with keys:
+        duty_kW       : heat transferred [kW]  (positive = heat added to stream)
+        duty_kJh      : same in kJ/h
+        LMTD_K        : log-mean temperature difference [K]  (HX only; 0 for heater/cooler)
     """
     def _get(val):
         if val is None:
@@ -434,25 +434,24 @@ def hx_duty_results(hx_obj, inlet_stream_results: dict = None, outlet_stream_res
         except Exception:
             return 0.0
 
-    lmtd = 0.0
+    duty_kW = 0.0
+    lmtd    = 0.0
 
-    # Preferred: compute from enthalpy balance
-    if inlet_stream_results is not None and outlet_stream_results is not None:
-        H_in   = inlet_stream_results["enthalpy_kJkmol"]   # kJ/kmol
-        H_out  = outlet_stream_results["enthalpy_kJkmol"]  # kJ/kmol
-        F      = outlet_stream_results["molar_flow_molh"]  # mol/h
-        duty_kW = (H_out - H_in) * (F / 1000) / 3600      # kJ/kmol × kmol/h ÷ 3600 = kW
-    else:
-        duty_kW = _get(hx_obj.DeltaQ)
-
-    # LMTD for two-stream HX only
+    # Heater / Cooler: DeltaQ is already in kW
     try:
-        lmtd = _get(hx_obj.LMTD)
+        duty_kW = _get(hx_obj.DeltaQ)
+    except AttributeError:
+        pass
+
+    # Two-stream HX: HeatLoad is in kW, LMTD in K
+    try:
+        duty_kW = _get(hx_obj.HeatLoad)
+        lmtd    = _get(hx_obj.LMTD)
     except AttributeError:
         pass
 
     return {
-        "duty_kW":  round(duty_kW,        2),
-        "duty_kJh": round(duty_kW * 3600, 2),
+        "duty_kW":  round(duty_kW,        4),
+        "duty_kJh": round(duty_kW * 3600, 4),
         "LMTD_K":   round(lmtd,           4),
     }

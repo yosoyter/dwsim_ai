@@ -161,7 +161,7 @@ def test_cooler():
 
     inlet_r  = hx_stream_results(feed,             "C1_IN",  comp_names)
     outlet_r = hx_stream_results(hx.outlet_stream, "C1_OUT", comp_names)
-    duty_r   = hx_duty_results(hx.obj)
+    duty_r   = hx_duty_results(hx.obj, inlet_r, outlet_r)
 
     print("\n  Results:")
     _print_stream("Inlet",  inlet_r)
@@ -179,6 +179,16 @@ def test_cooler():
 #  Cold side: Propane 50% / n-Butane 50% at 30C,  10 bar, 80 kmol/h  → heated
 #  Expected: hot outlet T = 60C; cold outlet T computed by energy balance
 # ─────────────────────────────────────────────────────────────────────────────
+
+def debug_hx_enum():
+    """Print all available CalcMode enum members on DWSIM HeatExchanger."""
+    interf, sim, comp_names = _init(["Propane", "n-Butane"], "PR")
+    from DWSIM.UnitOperations.UnitOperations import HeatExchanger as DWSIMHeatExchanger
+    print("\nHeatExchanger.CalculationMode members:")
+    for name in dir(DWSIMHeatExchanger.CalculationMode):
+        if not name.startswith("_"):
+            print(f"  {name}")
+
 
 def test_hx():
     print("\n" + "=" * 60)
@@ -199,13 +209,15 @@ def test_hx():
     hx = build_hx(sim, name="HX1", calc_mode="hot_outlet_T",
                   hot_outlet_T_C=60.0, x_pos=300, y_pos=300)
 
-    # Wire hot side: HOT_FEED → HX1 (port 0) → HOT_OUT (port 1)
-    sim.ConnectObjects(hot_feed.GraphicObject,           hx.obj.GraphicObject,              -1, 0)
-    sim.ConnectObjects(hx.obj.GraphicObject,             hx.hot_outlet_stream.GraphicObject,  1, -1)
+    # Wire hot feed → HX hot inlet stream → HX → HX hot outlet stream
+    sim.ConnectObjects(hot_feed.GraphicObject, hx.hot_inlet_stream.GraphicObject, -1, -1)
+    sim.ConnectObjects(hx.hot_inlet_stream.GraphicObject, hx.obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(hx.obj.GraphicObject, hx.hot_outlet_stream.GraphicObject, -1, -1)
 
-    # Wire cold side: COLD_FEED → HX1 (port 2) → COLD_OUT (port 3)
-    sim.ConnectObjects(cold_feed.GraphicObject,          hx.obj.GraphicObject,              -1, 2)
-    sim.ConnectObjects(hx.obj.GraphicObject,             hx.cold_outlet_stream.GraphicObject, 3, -1)
+    # Wire cold feed → HX cold inlet stream → HX → HX cold outlet stream
+    sim.ConnectObjects(cold_feed.GraphicObject, hx.cold_inlet_stream.GraphicObject, -1, -1)
+    sim.ConnectObjects(hx.cold_inlet_stream.GraphicObject, hx.obj.GraphicObject, -1, -1)
+    sim.ConnectObjects(hx.obj.GraphicObject, hx.cold_outlet_stream.GraphicObject, -1, -1)
 
     sim.AutoLayout()
     _solve(interf, sim)
@@ -236,12 +248,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Heat exchanger unit op tests")
     parser.add_argument(
         "--test",
-        choices=["heater", "cooler", "hx", "all"],
+        choices=["heater", "cooler", "hx", "all", "debug_hx_enum"],
         default="all",
         help="Which test to run (default: all)"
     )
     args = parser.parse_args()
 
+    if args.test == "debug_hx_enum":
+        debug_hx_enum()
     if args.test in ("heater", "all"):
         test_heater()
     if args.test in ("cooler", "all"):
