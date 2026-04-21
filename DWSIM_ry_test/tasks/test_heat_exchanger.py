@@ -243,12 +243,10 @@ def test_hx():
     calc_mode_attrs = [a for a in dir(DWSIMHX.CalculationMode) if not a.startswith('_')]
     print(f"[debug] CalculationMode enum members: {calc_mode_attrs}")
 
-    # Connect hot second (gets port 1 = DWSIM's "Stream 2" = "cold" internally)
     sim.ConnectObjects(hot_feed.GraphicObject,   hx.obj.GraphicObject,               -1, -1)
     sim.ConnectObjects(hx.obj.GraphicObject,     hx.hot_outlet_stream.GraphicObject,  -1, -1)
     sim.AutoLayout()
 
-    # Connect cold first (gets port 0 = DWSIM's "Stream 1" = "hot" internally)
     sim.ConnectObjects(cold_feed.GraphicObject,  hx.obj.GraphicObject,               -1, -1)
     sim.ConnectObjects(hx.obj.GraphicObject,     hx.cold_outlet_stream.GraphicObject, -1, -1)
     sim.AutoLayout()
@@ -304,9 +302,9 @@ def test_hx():
     print(f"[debug] post-solve ColdSideOutletTemp:      {hx.obj.ColdSideOutletTemperature - 273.15:.2f} C")
 
     hot_in_r   = hx_stream_results(hot_feed,               "HOT_IN",   comp_names)
-    hot_out_r  = hx_stream_results(hx.cold_outlet_stream,  "HOT_OUT",  comp_names)  # port 1 = hot side
+    hot_out_r  = hx_stream_results(hx.hot_outlet_stream,  "HOT_OUT",  comp_names)  # port 1 = hot side
     cold_in_r  = hx_stream_results(cold_feed,              "COLD_IN",  comp_names)
-    cold_out_r = hx_stream_results(hx.hot_outlet_stream,   "COLD_OUT", comp_names)  # port 0 = cold side
+    cold_out_r = hx_stream_results(hx.cold_outlet_stream,   "COLD_OUT", comp_names)  # port 0 = cold side
     duty_r     = hx_duty_results(hx.obj, hot_in_r, hot_out_r)
 
     print("\n  Results:")

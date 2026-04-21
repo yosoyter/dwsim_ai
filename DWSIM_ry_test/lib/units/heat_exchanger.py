@@ -233,8 +233,8 @@ def build_cooler(
 
 # DWSIM HeatExchanger calculation mode integers
 HX_CALC_MODE_KEYS = {
-    "hot_outlet_T":   0,   # CalcTempHotOut
-    "cold_outlet_T":  1,   # CalcTempColdOut
+    "hot_outlet_T":   1,   # CalcTempHotOut
+    "cold_outlet_T":  0,   # CalcTempColdOut
     "both_temp":      2,   # CalcBothTemp  (specify both outlets)
     "area":           3,   # CalcBothTemp_UA (specify area + U)
     "pinch":          7,   # PinchPoint
@@ -317,7 +317,7 @@ def build_hx(
     if calc_mode == "hot_outlet_T":
         if hot_outlet_T_C is None:
             raise ValueError("[heat_exchanger] hot_outlet_T_C required for calc_mode='hot_outlet_T'")
-        hx_obj.set_ColdSideOutletTemperature(hot_outlet_T_C + 273.15)
+        hx_obj.set_HotSideOutletTemperature(hot_outlet_T_C + 273.15)
         #hx_obj.HotSideOutletTemperature = hot_outlet_T_C + 273.15
         #hx_obj.MITA = 10.0
         print(f"[heat_exchanger] HX '{name}': hot outlet = {hot_outlet_T_C:.1f} C")
@@ -326,8 +326,8 @@ def build_hx(
         if cold_outlet_T_C is None:
             raise ValueError("[heat_exchanger] cold_outlet_T_C required for calc_mode='cold_outlet_T'")
         #hx_obj.ColdSideOutletTemperature = cold_outlet_T_C + 273.15
-        hx_obj.set_HotSideOutletTemperature(cold_outlet_T_C + 273.15)
-        hx_obj.MITA = 10.0
+        hx_obj.set_ColdSideOutletTemperature(cold_outlet_T_C + 273.15)
+        #hx_obj.MITA = 10.0
         print(f"[heat_exchanger] HX '{name}': cold outlet = {cold_outlet_T_C:.1f} C")
 
     elif calc_mode == "duty":
@@ -353,8 +353,8 @@ def build_hx(
 
     return SimpleNamespace(
         obj                 = hx_obj,
-        hot_outlet_stream   = stream2_outlet,
-        cold_outlet_stream  = stream1_outlet,
+        hot_outlet_stream   = stream1_outlet,
+        cold_outlet_stream  = stream2_outlet,
         mode                = "hx",
         calc_mode           = calc_mode,
     )
