@@ -233,10 +233,12 @@ def build_cooler(
 
 # DWSIM HeatExchanger calculation mode integers
 HX_CALC_MODE_KEYS = {
-    "hot_outlet_T":  0,
-    "cold_outlet_T": 1,
-    "area":          2,
-    "duty":          3,
+    "hot_outlet_T":   0,   # CalcTempHotOut
+    "cold_outlet_T":  1,   # CalcTempColdOut
+    "both_temp":      2,   # CalcBothTemp  (specify both outlets)
+    "area":           3,   # CalcBothTemp_UA (specify area + U)
+    "pinch":          7,   # PinchPoint
+    "efficiency":     8,   # ThermalEfficiency
 }
 
 def build_hx(
@@ -308,14 +310,15 @@ def build_hx(
             f"[heat_exchanger] Unknown calc_mode '{calc_mode}'. "
             f"Valid: {list(HX_CALC_MODE_KEYS.keys())}"
         )
-    hx_obj.SetCalculationMode(HX_CALC_MODE_KEYS[calc_mode])  # sets CalcMode correctly
+    from DWSIM.UnitOperations.UnitOperations import HeatExchanger as _HX
+    hx_obj.set_CalculationMode(_HX.CalculationMode(HX_CALC_MODE_KEYS[calc_mode]))
     hx_obj.CalculationMode = hx_obj.CalcMode                 # sync CalculationMode from CalcMode
 
     # Set operating parameters based on mode
     if calc_mode == "hot_outlet_T":
         if hot_outlet_T_C is None:
             raise ValueError("[heat_exchanger] hot_outlet_T_C required for calc_mode='hot_outlet_T'")
-        hx_obj.HotSideOutletTemperature = hot_outlet_T_C + 273.15
+        hx_obj.set_HotSideOutletTemperature(hot_outlet_T_C + 273.15)
         print(f"[heat_exchanger] HX '{name}': hot outlet = {hot_outlet_T_C:.1f} C")
 
     elif calc_mode == "cold_outlet_T":

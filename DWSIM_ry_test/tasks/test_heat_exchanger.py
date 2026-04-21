@@ -210,12 +210,9 @@ def test_hx():
     members = [a for a in dir(DWSIMHX.CalculationMode) if not a.startswith('_')]
     print(f"[debug] CalculationMode enum members: {members}")
 
-    #hx = build_hx(sim, name="HX1", calc_mode="hot_outlet_T",
-    #              hot_outlet_T_C=60.0, x_pos=300, y_pos=300)
-    # In test_hx, temporarily replace build_hx call with:
-    hx = build_hx(sim, name="HX1", calc_mode="duty",
-                  duty_kW=-11845.7,   # negative = heat removed from hot side
-                  x_pos=300, y_pos=300)
+    hx = build_hx(sim, name="HX1", calc_mode="hot_outlet_T",
+                  hot_outlet_T_C=60.0, x_pos=300, y_pos=300)
+                  
     # Get real calc mode names
     modes = hx.obj.GetCalculationModes()
     print(f"[debug] Valid CalcModes: {[modes[i] for i in range(len(modes))]}")
