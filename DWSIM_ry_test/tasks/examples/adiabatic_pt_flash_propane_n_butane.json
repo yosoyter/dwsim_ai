@@ -2,16 +2,16 @@
   "task_type": "flash",
   "flash_mode": "adiabatic_PT_flash",
   "components": {
-    "Propane": 0.5,
-    "n-Butane": 0.5
+    "Propane": 0.4,
+    "n-Butane": 0.6
   },
   "feed": {
     "flow_kmol_h": 100.0,
-    "temperature_C": 25.0,
-    "pressure_bar": 20.0
+    "temperature_C": 80.0,
+    "pressure_bar": 15.0
   },
   "flash_drum": {
-    "pressure_bar": 3.0
+    "pressure_bar": 4.0
   },
   "property_package": "PR"
 }

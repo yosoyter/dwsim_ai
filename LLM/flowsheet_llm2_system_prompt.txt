@@ -44,6 +44,18 @@ add_flash(name, x_pos=500, y_pos=300)
     .liquid_stream — wire this downstream (liquid outlet)
     .energy_stream — wire this INTO .obj
 
+add_valve(name, P_out_bar, x_pos=430, y_pos=300)
+  Add a Valve for isenthalpic pressure reduction between two unit ops.
+  Use this whenever the drum pressure is lower than the upstream unit op outlet pressure.
+  Returns: SimpleNamespace with:
+    .obj           — Valve DWSIM object
+    .outlet_stream — outlet MaterialStream
+
+  Wiring pattern:
+      connect(upstream_stream, valve.obj)
+      connect(valve.obj, valve.outlet_stream)
+      auto_layout()
+
 connect(from_obj, to_obj)
   Wire two DWSIM objects: connect(source_obj, destination_obj)
   Use .obj for unit ops (not the SimpleNamespace itself).
@@ -206,9 +218,13 @@ auto_layout()
 
 f_step = steps[1]
 flash = add_flash(name=f_step["name"], x_pos=550, y_pos=300)
-heater.outlet_stream.SetTemperature(f_step["T_C"] + 273.15)
-heater.outlet_stream.SetPressure(f_step["P_bar"] * 1e5)
-connect(heater.outlet_stream, flash.obj)
+valve = add_valve(name="V1", P_out_bar=f_step["P_bar"], x_pos=460, y_pos=300)
+connect(heater.outlet_stream, valve.obj)
+connect(valve.obj, valve.outlet_stream)
+auto_layout()
+
+flash = add_flash(name=f_step["name"], x_pos=600, y_pos=300)
+connect(valve.outlet_stream, flash.obj)
 connect(flash.obj, flash.vapor_stream)
 connect(flash.obj, flash.liquid_stream)
 connect(flash.energy_stream, flash.obj)
@@ -219,6 +235,7 @@ streams = {
     "H1_OUT": heater.outlet_stream,
     "V":      flash.vapor_stream,
     "L":      flash.liquid_stream,
+    "VALVE_OUT": valve.outlet_stream,
 }
 
 ### OUTPUT BLOCK

@@ -304,6 +304,47 @@ def _make_add_flash(sim):
         )
     return add_flash
 
+def _make_add_valve(sim):
+    """Factory: returns add_valve() bound to this sim."""
+    def add_valve(name: str, P_out_bar: float,
+                  x_pos: int = 430, y_pos: int = 300):
+        """
+        Add a Valve unit op for isenthalpic pressure reduction.
+
+        Parameters
+        ----------
+        name      : label on flowsheet
+        P_out_bar : outlet pressure [bar]
+        x_pos, y_pos : canvas position
+
+        Returns
+        -------
+        SimpleNamespace with:
+          .obj           — Valve DWSIM object
+          .outlet_stream — outlet MaterialStream
+
+        Wiring pattern:
+            connect(upstream_stream, valve.obj)
+            connect(valve.obj, valve.outlet_stream)
+            auto_layout()
+        """
+        from types import SimpleNamespace
+        from DWSIM.Interfaces.Enums.GraphicObjects import ObjectType
+        from DWSIM.UnitOperations import UnitOperations as DWSIMUnitOps
+
+        obj = sim.AddObject(ObjectType.Valve, x_pos, y_pos, name).GetAsObject()
+        obj.OutletPressure = P_out_bar * 1e5
+        obj.CalcMode = DWSIMUnitOps.Valve.CalculationMode.OutletPressure
+
+        outlet_stream = sim.AddObject(ObjectType.MaterialStream,
+                                      x_pos + 100, y_pos,
+                                      f"{name}_OUT").GetAsObject()
+        return SimpleNamespace(
+            obj           = obj,
+            outlet_stream = outlet_stream,
+        )
+    return add_valve
+
 
 def _make_extract(comp_names):
     """Factory: returns extract() bound to comp_names."""
@@ -381,7 +422,7 @@ def _exec_assembly_block(assembly_code: str, sim, comp_names: list,
     flowsheet_master.py will call solve, then call extract() on each stream in `streams`.
     """
     indented = textwrap.indent(assembly_code, "    ")
-    fn_source = f"def assembly_block(sim, task, comp_names, add_feed, add_stream, build_heater, build_cooler, add_flash, connect, calc_duty, extract, auto_layout):\n{indented}\n    return streams\n"
+    fn_source = f"def assembly_block(sim, task, comp_names, add_feed, add_stream, build_heater, build_cooler, add_flash, add_valve, connect, calc_duty, extract, auto_layout):\n{indented}\n    return streams\n"
 
     namespace = {}
     exec(fn_source, namespace)
@@ -390,20 +431,26 @@ def _exec_assembly_block(assembly_code: str, sim, comp_names: list,
     def auto_layout():
         sim.AutoLayout()
 
-    streams = assembly_fn(
-        sim          = sim,
-        task         = task,
-        comp_names   = comp_names,
-        add_feed     = _make_add_feed(sim, comp_names),
-        add_stream   = _make_add_stream(sim),
-        build_heater = _make_build_heater(sim),
-        build_cooler = _make_build_cooler(sim),
-        add_flash    = _make_add_flash(sim),
-        connect      = _make_connect(sim),
-        calc_duty    = _calc_duty,
-        extract      = _make_extract(comp_names),   # available but called post-solve
-        auto_layout  = auto_layout,
-    )
+    try:
+        streams = assembly_fn(
+            sim          = sim,
+            task         = task,
+            comp_names   = comp_names,
+            add_feed     = _make_add_feed(sim, comp_names),
+            add_stream   = _make_add_stream(sim),
+            build_heater = _make_build_heater(sim),
+            build_cooler = _make_build_cooler(sim),
+            add_flash    = _make_add_flash(sim),
+            add_valve    = _make_add_valve(sim),
+            connect      = _make_connect(sim),
+            calc_duty    = _calc_duty,
+            extract      = _make_extract(comp_names),
+            auto_layout  = auto_layout,
+        )
+    except Exception as e:
+        import traceback
+        print(f"[flowsheet_master] Assembly block crashed:\n{traceback.format_exc()}")
+        raise
     return streams
 
 
@@ -450,7 +497,6 @@ def run_flowsheet_master(task: dict, assembly_code: str, output_block_fn,
     from DWSIM_ry_test.lib.dwsim_core import (
         init_dwsim, create_flowsheet, select_property_package, save_flowsheet,
     )
-    from DWSIM.GlobalSettings import Settings
 
     comp_dict = {k: float(v) for k, v in task["components"].items()}
     comp_list = list(comp_dict.keys())
@@ -476,6 +522,7 @@ def run_flowsheet_master(task: dict, assembly_code: str, output_block_fn,
 
     # ── Solve ─────────────────────────────────────────────────────────────────
     print("[flowsheet_master] Solving flowsheet...")
+    from DWSIM.GlobalSettings import Settings
     Settings.SolverMode = 0
     errors = interf.CalculateFlowsheet4(sim)
     if errors is not None and len(errors) > 0:
