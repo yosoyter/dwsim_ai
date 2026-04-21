@@ -212,7 +212,7 @@ def test_hx():
 
     hx = build_hx(sim, name="HX1", calc_mode="hot_outlet_T",
                   hot_outlet_T_C=60.0, x_pos=300, y_pos=300)
-                  
+
     # Get real calc mode names
     modes = hx.obj.GetCalculationModes()
     print(f"[debug] Valid CalcModes: {[modes[i] for i in range(len(modes))]}")
@@ -243,14 +243,14 @@ def test_hx():
     calc_mode_attrs = [a for a in dir(DWSIMHX.CalculationMode) if not a.startswith('_')]
     print(f"[debug] CalculationMode enum members: {calc_mode_attrs}")
 
-    # Step 1: connect hot side only, then layout
-    sim.ConnectObjects(hot_feed.GraphicObject,             hx.obj.GraphicObject,               -1, -1)
-    sim.ConnectObjects(hx.obj.GraphicObject,               hx.hot_outlet_stream.GraphicObject, -1, -1)
+    # Connect hot second (gets port 1 = DWSIM's "Stream 2" = "cold" internally)
+    sim.ConnectObjects(hot_feed.GraphicObject,   hx.obj.GraphicObject,               -1, -1)
+    sim.ConnectObjects(hx.obj.GraphicObject,     hx.hot_outlet_stream.GraphicObject,  -1, -1)
     sim.AutoLayout()
 
-    # Step 2: connect cold side
-    sim.ConnectObjects(cold_feed.GraphicObject,            hx.obj.GraphicObject,               -1, -1)
-    sim.ConnectObjects(hx.obj.GraphicObject,               hx.cold_outlet_stream.GraphicObject,-1, -1)
+    # Connect cold first (gets port 0 = DWSIM's "Stream 1" = "hot" internally)
+    sim.ConnectObjects(cold_feed.GraphicObject,  hx.obj.GraphicObject,               -1, -1)
+    sim.ConnectObjects(hx.obj.GraphicObject,     hx.cold_outlet_stream.GraphicObject, -1, -1)
     sim.AutoLayout()
 
     ports_info = hx.obj.GetConnectionPortsInfo()
@@ -296,14 +296,17 @@ def test_hx():
     sim.AutoLayout()
     _solve(interf, sim)
 
+    #print(f"[debug] InletStream1 T = {hx.obj.GetInletMaterialStream(0).Phases[0].Properties.temperature - 273.15:.2f} C")
+    #print(f"[debug] InletStream2 T = {hx.obj.GetInletMaterialStream(1).Phases[0].Properties.temperature - 273.15:.2f} C")
+
     print(f"[debug] post-solve CalcMode:               {hx.obj.CalcMode}")
     print(f"[debug] post-solve HotSideOutletTemp:       {hx.obj.HotSideOutletTemperature - 273.15:.2f} C")
     print(f"[debug] post-solve ColdSideOutletTemp:      {hx.obj.ColdSideOutletTemperature - 273.15:.2f} C")
 
     hot_in_r   = hx_stream_results(hot_feed,               "HOT_IN",   comp_names)
-    hot_out_r  = hx_stream_results(hx.hot_outlet_stream,   "HOT_OUT",  comp_names)
+    hot_out_r  = hx_stream_results(hx.cold_outlet_stream,  "HOT_OUT",  comp_names)  # port 1 = hot side
     cold_in_r  = hx_stream_results(cold_feed,              "COLD_IN",  comp_names)
-    cold_out_r = hx_stream_results(hx.cold_outlet_stream,  "COLD_OUT", comp_names)
+    cold_out_r = hx_stream_results(hx.hot_outlet_stream,   "COLD_OUT", comp_names)  # port 0 = cold side
     duty_r     = hx_duty_results(hx.obj, hot_in_r, hot_out_r)
 
     print("\n  Results:")

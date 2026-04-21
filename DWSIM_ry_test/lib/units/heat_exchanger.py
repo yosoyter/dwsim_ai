@@ -310,21 +310,24 @@ def build_hx(
             f"[heat_exchanger] Unknown calc_mode '{calc_mode}'. "
             f"Valid: {list(HX_CALC_MODE_KEYS.keys())}"
         )
-    from DWSIM.UnitOperations.UnitOperations import HeatExchanger as _HX
-    hx_obj.set_CalculationMode(_HX.CalculationMode(HX_CALC_MODE_KEYS[calc_mode]))
-    hx_obj.CalculationMode = hx_obj.CalcMode                 # sync CalculationMode from CalcMode
+    from DWSIM.UnitOperations.UnitOperations import HeatExchangerCalcMode
+    hx_obj.set_CalculationMode(HeatExchangerCalcMode(HX_CALC_MODE_KEYS[calc_mode]))
 
     # Set operating parameters based on mode
     if calc_mode == "hot_outlet_T":
         if hot_outlet_T_C is None:
             raise ValueError("[heat_exchanger] hot_outlet_T_C required for calc_mode='hot_outlet_T'")
-        hx_obj.set_HotSideOutletTemperature(hot_outlet_T_C + 273.15)
+        hx_obj.set_ColdSideOutletTemperature(hot_outlet_T_C + 273.15)
+        #hx_obj.HotSideOutletTemperature = hot_outlet_T_C + 273.15
+        #hx_obj.MITA = 10.0
         print(f"[heat_exchanger] HX '{name}': hot outlet = {hot_outlet_T_C:.1f} C")
 
     elif calc_mode == "cold_outlet_T":
         if cold_outlet_T_C is None:
             raise ValueError("[heat_exchanger] cold_outlet_T_C required for calc_mode='cold_outlet_T'")
-        hx_obj.ColdSideOutletTemperature = cold_outlet_T_C + 273.15
+        #hx_obj.ColdSideOutletTemperature = cold_outlet_T_C + 273.15
+        hx_obj.set_HotSideOutletTemperature(cold_outlet_T_C + 273.15)
+        hx_obj.MITA = 10.0
         print(f"[heat_exchanger] HX '{name}': cold outlet = {cold_outlet_T_C:.1f} C")
 
     elif calc_mode == "duty":
@@ -345,13 +348,13 @@ def build_hx(
     hx_obj.ColdSidePressureDrop = cold_pressure_drop_bar * 1e5
 
     # Create associated streams at sensible canvas positions
-    hot_outlet   = _add_stream(sim, x_pos + 150, y_pos - 60,  f"{name}_HOT_OUT")
-    cold_outlet  = _add_stream(sim, x_pos + 150, y_pos + 60,  f"{name}_COLD_OUT")
+    stream1_outlet = _add_stream(sim, x_pos + 150, y_pos - 60, f"{name}_OUT1")  # DWSIM cold side
+    stream2_outlet = _add_stream(sim, x_pos + 150, y_pos + 60, f"{name}_OUT2")  # DWSIM hot side
 
     return SimpleNamespace(
         obj                 = hx_obj,
-        hot_outlet_stream   = hot_outlet,
-        cold_outlet_stream  = cold_outlet,
+        hot_outlet_stream   = stream2_outlet,
+        cold_outlet_stream  = stream1_outlet,
         mode                = "hx",
         calc_mode           = calc_mode,
     )
