@@ -206,27 +206,108 @@ def test_hx():
     _set_feed(sim, cold_feed, T_C=30,  P_bar=10, flow_kmol_h=80,
               comp_fracs={"Propane": 0.5, "n-Butane": 0.5})
 
-    hx = build_hx(sim, name="HX1", calc_mode="hot_outlet_T",
-                  hot_outlet_T_C=60.0, x_pos=300, y_pos=300)
+    from DWSIM.UnitOperations.UnitOperations import HeatExchanger as DWSIMHX
+    members = [a for a in dir(DWSIMHX.CalculationMode) if not a.startswith('_')]
+    print(f"[debug] CalculationMode enum members: {members}")
 
-    # Wire hot feed → HX hot inlet stream → HX → HX hot outlet stream
-    sim.ConnectObjects(hot_feed.GraphicObject, hx.hot_inlet_stream.GraphicObject, -1, -1)
-    sim.ConnectObjects(hx.hot_inlet_stream.GraphicObject, hx.obj.GraphicObject, -1, -1)
-    sim.ConnectObjects(hx.obj.GraphicObject, hx.hot_outlet_stream.GraphicObject, -1, -1)
+    #hx = build_hx(sim, name="HX1", calc_mode="hot_outlet_T",
+    #              hot_outlet_T_C=60.0, x_pos=300, y_pos=300)
+    # In test_hx, temporarily replace build_hx call with:
+    hx = build_hx(sim, name="HX1", calc_mode="duty",
+                  duty_kW=-11845.7,   # negative = heat removed from hot side
+                  x_pos=300, y_pos=300)
+    # Get real calc mode names
+    modes = hx.obj.GetCalculationModes()
+    print(f"[debug] Valid CalcModes: {[modes[i] for i in range(len(modes))]}")
 
-    # Wire cold feed → HX cold inlet stream → HX → HX cold outlet stream
-    sim.ConnectObjects(cold_feed.GraphicObject, hx.cold_inlet_stream.GraphicObject, -1, -1)
-    sim.ConnectObjects(hx.cold_inlet_stream.GraphicObject, hx.obj.GraphicObject, -1, -1)
-    sim.ConnectObjects(hx.obj.GraphicObject, hx.cold_outlet_stream.GraphicObject, -1, -1)
+    # Check FlowDir
+    print(f"[debug] FlowDir: {hx.obj.FlowDir}")
+    print(f"[debug] m_flowdirection: {hx.obj.m_flowdirection}")
+
+    # Try setting FlowDir to counter-current (most common for shell-and-tube)
+    # Try 0 and 1 to see which is which
+    flow_dir_attrs = [a for a in dir(hx.obj.FlowDir.__class__) if not a.startswith('_')]
+    print(f"[debug] FlowDir type/attrs: {hx.obj.FlowDir.__class__}, {flow_dir_attrs}")
+
+    print(f"[debug] hot_feed      name: {hot_feed.GraphicObject.Name}")
+    print(f"[debug] cold_feed     name: {cold_feed.GraphicObject.Name}")
+    print(f"[debug] hot_outlet    name: {hx.hot_outlet_stream.GraphicObject.Name}")
+    print(f"[debug] cold_outlet   name: {hx.cold_outlet_stream.GraphicObject.Name}")
+
+    # Add this right after build_hx(), before any ConnectObjects calls
+    print(f"[debug] CalcMode before solve: {hx.obj.CalculationMode}")
+    print(f"[debug] HotSideOutletT before solve: {hx.obj.HotSideOutletTemperature - 273.15:.2f} C")
+
+    # Also check what SetCalculationMode actually is
+    calc_attrs = [a for a in dir(hx.obj) if 'calc' in a.lower() or 'mode' in a.lower()]
+    print(f"[debug] calc/mode attrs: {calc_attrs}")
+
+    from DWSIM.UnitOperations.UnitOperations import HeatExchanger as DWSIMHX
+    calc_mode_attrs = [a for a in dir(DWSIMHX.CalculationMode) if not a.startswith('_')]
+    print(f"[debug] CalculationMode enum members: {calc_mode_attrs}")
+
+    # Step 1: connect hot side only, then layout
+    sim.ConnectObjects(hot_feed.GraphicObject,             hx.obj.GraphicObject,               -1, -1)
+    sim.ConnectObjects(hx.obj.GraphicObject,               hx.hot_outlet_stream.GraphicObject, -1, -1)
+    sim.AutoLayout()
+
+    # Step 2: connect cold side
+    sim.ConnectObjects(cold_feed.GraphicObject,            hx.obj.GraphicObject,               -1, -1)
+    sim.ConnectObjects(hx.obj.GraphicObject,               hx.cold_outlet_stream.GraphicObject,-1, -1)
+    sim.AutoLayout()
+
+    ports_info = hx.obj.GetConnectionPortsInfo()
+    print(f"[debug] Connection ports info: {ports_info}")
+
+    ports_list = hx.obj.GetConnectionPortsList()
+    print(f"[debug] Connection ports list: {ports_list}")
+
+    go = hx.obj.GraphicObject
+    # Also check GraphicObject connectors
+    for i in range(go.InputConnectors.Count):
+        ic = go.InputConnectors[i]
+        if ic.IsAttached:
+            try:
+                name = ic.AttachedConnector.AttachedFrom.Owner.Name
+            except:
+                name = str(ic.AttachedConnector.AttachedFrom.Owner)
+        else:
+            name = 'None'
+        print(f"[debug] Input connector {i}: IsAttached={ic.IsAttached}, stream={name}")
+
+    for i in range(go.OutputConnectors.Count):
+        oc = go.OutputConnectors[i]
+        if oc.IsAttached:
+            try:
+                name = oc.AttachedConnector.AttachedTo.Owner.Name
+            except:
+                name = str(oc.AttachedConnector.AttachedTo.Owner)
+        else:
+            name = 'None'
+        print(f"[debug] Output connector {i}: IsAttached={oc.IsAttached}, stream={name}")
+
+    ports_list = hx.obj.GetConnectionPortsList()
+    for i in range(ports_list.Count):
+        print(f"[debug] Port {i}: {ports_list[i]}")
+    
+    print(f"[debug] CalcMode: {hx.obj.CalcMode}")
+    print(f"[debug] CalculationMode: {hx.obj.CalculationMode}")
+
+    flow_attrs = [a for a in dir(hx.obj) if 'flow' in a.lower() or 'direct' in a.lower() or 'config' in a.lower()]
+    print(f"[debug] flow/direction attrs: {flow_attrs}")
 
     sim.AutoLayout()
     _solve(interf, sim)
+
+    print(f"[debug] post-solve CalcMode:               {hx.obj.CalcMode}")
+    print(f"[debug] post-solve HotSideOutletTemp:       {hx.obj.HotSideOutletTemperature - 273.15:.2f} C")
+    print(f"[debug] post-solve ColdSideOutletTemp:      {hx.obj.ColdSideOutletTemperature - 273.15:.2f} C")
 
     hot_in_r   = hx_stream_results(hot_feed,               "HOT_IN",   comp_names)
     hot_out_r  = hx_stream_results(hx.hot_outlet_stream,   "HOT_OUT",  comp_names)
     cold_in_r  = hx_stream_results(cold_feed,              "COLD_IN",  comp_names)
     cold_out_r = hx_stream_results(hx.cold_outlet_stream,  "COLD_OUT", comp_names)
-    duty_r     = hx_duty_results(hx.obj, inlet_r, outlet_r)
+    duty_r     = hx_duty_results(hx.obj, hot_in_r, hot_out_r)
 
     print("\n  Results:")
     _print_stream("Hot  inlet",  hot_in_r)

@@ -308,7 +308,8 @@ def build_hx(
             f"[heat_exchanger] Unknown calc_mode '{calc_mode}'. "
             f"Valid: {list(HX_CALC_MODE_KEYS.keys())}"
         )
-    hx_obj.SetCalculationMode(HX_CALC_MODE_KEYS[calc_mode])
+    hx_obj.SetCalculationMode(HX_CALC_MODE_KEYS[calc_mode])  # sets CalcMode correctly
+    hx_obj.CalculationMode = hx_obj.CalcMode                 # sync CalculationMode from CalcMode
 
     # Set operating parameters based on mode
     if calc_mode == "hot_outlet_T":
@@ -341,16 +342,12 @@ def build_hx(
     hx_obj.ColdSidePressureDrop = cold_pressure_drop_bar * 1e5
 
     # Create associated streams at sensible canvas positions
-    hot_inlet    = _add_stream(sim, x_pos - 150, y_pos - 60,  f"{name}_HOT_IN")
     hot_outlet   = _add_stream(sim, x_pos + 150, y_pos - 60,  f"{name}_HOT_OUT")
-    cold_inlet   = _add_stream(sim, x_pos - 150, y_pos + 60,  f"{name}_COLD_IN")
     cold_outlet  = _add_stream(sim, x_pos + 150, y_pos + 60,  f"{name}_COLD_OUT")
 
     return SimpleNamespace(
         obj                 = hx_obj,
-        hot_inlet_stream    = hot_inlet,
         hot_outlet_stream   = hot_outlet,
-        cold_inlet_stream   = cold_inlet,
         cold_outlet_stream  = cold_outlet,
         mode                = "hx",
         calc_mode           = calc_mode,
@@ -415,16 +412,11 @@ def hx_stream_results(stream_obj, stream_name: str, comp_names: list) -> dict:
     return result
 
 
-def hx_duty_results(hx_obj) -> dict:
+def hx_duty_results(hx_obj, inlet_results: dict = None, outlet_results: dict = None) -> dict:
     """
-    Extract heat duty and LMTD from a solved Heater, Cooler, or HeatExchanger object.
-
-    Returns
-    -------
-    dict with keys:
-        duty_kW       : heat transferred [kW]  (positive = heat added to stream)
-        duty_kJh      : same in kJ/h
-        LMTD_K        : log-mean temperature difference [K]  (HX only; 0 for heater/cooler)
+    Compute heat duty from stream enthalpy difference (preferred) or DeltaQ fallback.
+    For Heater/Cooler, pass inlet_results and outlet_results from hx_stream_results().
+    For two-stream HX, pass hot_in and hot_out results.
     """
     def _get(val):
         if val is None:
@@ -434,24 +426,25 @@ def hx_duty_results(hx_obj) -> dict:
         except Exception:
             return 0.0
 
-    duty_kW = 0.0
-    lmtd    = 0.0
+    lmtd = 0.0
 
-    # Heater / Cooler: DeltaQ is already in kW
-    try:
+    # Preferred: enthalpy balance from solved stream dicts
+    if inlet_results is not None and outlet_results is not None:
+        H_in    = inlet_results["enthalpy_kJkmol"]       # kJ/kmol
+        H_out   = outlet_results["enthalpy_kJkmol"]      # kJ/kmol
+        F       = outlet_results["molar_flow_molh"]      # mol/h
+        duty_kW = (H_out - H_in) * (F / 1000) / 3600    # kW
+    else:
         duty_kW = _get(hx_obj.DeltaQ)
-    except AttributeError:
-        pass
 
-    # Two-stream HX: HeatLoad is in kW, LMTD in K
+    # LMTD for two-stream HX only
     try:
-        duty_kW = _get(hx_obj.HeatLoad)
-        lmtd    = _get(hx_obj.LMTD)
+        lmtd = _get(hx_obj.LMTD)
     except AttributeError:
         pass
 
     return {
-        "duty_kW":  round(duty_kW,        4),
-        "duty_kJh": round(duty_kW * 3600, 4),
+        "duty_kW":  round(duty_kW,        2),
+        "duty_kJh": round(duty_kW * 3600, 2),
         "LMTD_K":   round(lmtd,           4),
     }
