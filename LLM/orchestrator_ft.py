@@ -61,6 +61,13 @@ REQUIRED_FIELDS = {
         "outlet",
         "property_package",
     ],
+    "flowsheet": [
+        "task_type",
+        "steps",
+        "feed",
+        "components",
+        "property_package",
+    ],
 }
 
 FLASH_MODE_REQUIRED_FIELDS = {
@@ -226,6 +233,42 @@ def validate_payload(payload: dict) -> bool:
         if abs(total - 1.0) > 0.02:
             print(f"[VALIDATION] Component mole fractions sum to {total:.3f}, not 1.0")
             return False
+    
+    # Flowsheet-specific checks
+    if task_type == "flowsheet":
+        steps = payload.get("steps", [])
+        if not isinstance(steps, list) or len(steps) < 2:
+            print("[VALIDATION] 'steps' must be a list of at least 2 unit ops for flowsheet task.")
+            return False
+
+        valid_units = {"heater", "cooler", "flash"}
+        for i, step in enumerate(steps):
+            if step.get("unit") not in valid_units:
+                print(f"[VALIDATION] Step {i}: unknown unit '{step.get('unit')}'. Valid: {valid_units}")
+                return False
+            if step["unit"] in ("heater", "cooler") and "T_out_C" not in step:
+                print(f"[VALIDATION] Step {i} ({step['unit']}): missing T_out_C")
+                return False
+            if step["unit"] == "flash" and "P_bar" not in step:
+                print(f"[VALIDATION] Step {i} (flash): missing P_bar")
+                return False
+
+        feed = payload.get("feed", {})
+        for f in ("temperature_C", "pressure_bar"):
+            if f not in feed:
+                print(f"[VALIDATION] Missing feed.{f} for flowsheet task")
+                return False
+
+        comps = payload.get("components", {})
+        if not isinstance(comps, dict) or len(comps) < 1:
+            print("[VALIDATION] 'components' must be a non-empty dict for flowsheet task.")
+            return False
+
+        total = sum(comps.values())
+        if abs(total - 1.0) > 0.02:
+            print(f"[VALIDATION] Component mole fractions sum to {total:.3f}, not 1.0")
+            return False
+
 
     print("[VALIDATION] Payload is valid. ✓")
     return True
@@ -268,6 +311,15 @@ def save_payload(payload: dict) -> str:
             c.lower().replace(" ", "_").replace("-", "_") for c in comp_names
         )
         filename = f"{heat_mode}_{comp_slug}.json"
+
+    elif task_type == "flowsheet":
+        comps = payload["components"]
+        comp_names = list(comps.keys())
+        comp_slug = "_".join(
+            c.lower().replace(" ", "_").replace("-", "_") for c in comp_names
+        )
+        step_slug = "_".join(s.get("name", s["unit"]) for s in payload["steps"])
+        filename = f"flowsheet_{step_slug}_{comp_slug}.json"
 
     else:
         filename = f"task_{task_type}.json"

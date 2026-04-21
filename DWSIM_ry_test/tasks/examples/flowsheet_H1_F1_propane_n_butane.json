@@ -1,0 +1,28 @@
+{
+  "task_type": "flowsheet",
+  "steps": [
+    {
+      "unit": "heater",
+      "name": "H1",
+      "T_out_C": 120.0,
+      "pressure_drop_bar": 0.0
+    },
+    {
+      "unit": "flash",
+      "name": "F1",
+      "flash_mode": "isothermal",
+      "T_C": 120.0,
+      "P_bar": 6.0
+    }
+  ],
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 60.0,
+    "pressure_bar": 14.0
+  },
+  "components": {
+    "Propane": 0.5,
+    "n-Butane": 0.5
+  },
+  "property_package": "PR"
+}

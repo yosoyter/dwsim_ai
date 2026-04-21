@@ -40,6 +40,11 @@ LLM2_SYSTEM_PROMPT_PATH = os.path.join(_HERE, "llm2_system_prompt.txt")
 with open(LLM2_SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
     LLM2_SYSTEM_PROMPT = f.read()
 
+FLOWSHEET_LLM2_SYSTEM_PROMPT_PATH = os.path.join(_HERE, "flowsheet_llm2_system_prompt.txt")
+
+with open(FLOWSHEET_LLM2_SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
+    FLOWSHEET_LLM2_SYSTEM_PROMPT = f.read()
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  STEP 1: Run LLM #1 to get the task JSON
 #  (reuses orchestrator_ft.py — no duplication)
@@ -142,6 +147,58 @@ BLOCKED_PATTERNS = [
     r"\bos\.popen\b",
 ]
 
+def generate_flowsheet_code(user_question: str, task_json: dict) -> tuple[str, str]:
+    """
+    Calls Claude (LLM #2) with the flowsheet system prompt.
+    Returns (assembly_code, output_code) as a tuple of raw Python strings.
+
+    The LLM response must contain two sections:
+      ### ASSEMBLY BLOCK
+      <code>
+      ### OUTPUT BLOCK
+      <code>
+    """
+    client = anthropic.Anthropic()
+
+    user_message = f"""User's original question:
+\"{user_question}\"
+
+Task JSON (already validated):
+{json.dumps(task_json, indent=2)}
+
+Write the ASSEMBLY BLOCK and OUTPUT BLOCK to build and present this flowsheet."""
+
+    print("\n[LLM #2] Generating flowsheet assembly + output blocks...")
+
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=2048,
+        system=FLOWSHEET_LLM2_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_message}]
+    )
+
+    raw = response.content[0].text.strip()
+    raw = re.sub(r"```python|```", "", raw).strip()
+
+    print(f"[LLM #2] Raw flowsheet response ({len(raw.splitlines())} lines).")
+
+    # Split on section headers
+    if "### ASSEMBLY BLOCK" not in raw or "### OUTPUT BLOCK" not in raw:
+        raise ValueError(
+            "[llm2] LLM #2 response missing required section headers.\n"
+            f"Response:\n{raw}"
+        )
+
+    parts        = raw.split("### OUTPUT BLOCK", 1)
+    assembly_raw = parts[0].split("### ASSEMBLY BLOCK", 1)[1].strip()
+    output_raw   = parts[1].strip()
+
+    print(f"[LLM #2] Assembly block: {len(assembly_raw.splitlines())} lines.")
+    print(f"[LLM #2] Output block:   {len(output_raw.splitlines())} lines.")
+
+    return assembly_raw, output_raw
+
+
 def validate_output_block(code: str) -> bool:
     """
     Lightweight safety check on the generated output block code.
@@ -231,6 +288,41 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] Pipeline complete.")
         return
     
+    # ── Flowsheet: LLM #2 generates assembly + output blocks ─────────────────
+    if task_json.get("task_type") == "flowsheet":
+        print("\n[llm2] Flowsheet task detected — generating assembly + output blocks.")
+
+        try:
+            assembly_code, output_code = generate_flowsheet_code(user_question, task_json)
+        except ValueError as e:
+            print(f"[llm2] Aborting: {e}")
+            return
+
+        print("\n[LLM #2] Assembly block:")
+        print("-" * 40)
+        print(assembly_code)
+        print("-" * 40)
+        print("\n[LLM #2] Output block:")
+        print("-" * 40)
+        print(output_code)
+        print("-" * 40)
+
+        # Validate both blocks
+        if not validate_output_block(assembly_code):
+            print("[llm2] Aborting: assembly block failed safety check.")
+            return
+        if not validate_output_block(output_code):
+            print("[llm2] Aborting: output block failed safety check.")
+            return
+
+        output_block_fn = build_output_block_fn(output_code)
+
+        from DWSIM_ry_test.tasks.flowsheet_master import run_flowsheet_master
+        run_flowsheet_master(task_json, assembly_code, output_block_fn)
+
+        print("\n[llm2] Pipeline complete.")
+        return
+
     # ── Heat: route to heat_master with LLM #2 code generation ───────────────
     if task_json.get("task_type") == "heat":
         print("\n[llm2] Heat task detected — generating output block for heater/cooler.")

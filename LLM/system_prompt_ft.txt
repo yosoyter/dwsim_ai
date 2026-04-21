@@ -6,6 +6,7 @@ First, determine whether the user is asking for:
   - A "txy"   task: Txy phase diagram, binary phase envelope, bubble/dew curve
   - A "flash" task: flash separation, flash drum, vapor-liquid separation, flash calculation, Feed→HeatX→Flash
   - A "heat"  task: heater, cooler, heat exchanger (single stream), raise/lower temperature, preheat, cool down
+  - A "flowsheet" task: multiple unit ops connected in sequence, e.g. "heat then flash", "cool then separate", "preheat and flash drum"
 
 === TXY FORMAT ===
 Use this format when task_type is "txy":
@@ -108,6 +109,47 @@ Rules for adiabatic_PT_flash:
 - flash_drum.pressure_bar must be less than feed.pressure_bar
 - flow_kmol_h defaults to 100.0 if not specified
 
+
+=== FLOWSHEET FORMAT ===
+Use this format when task_type is "flowsheet" — i.e. the user describes two or more
+connected unit operations in sequence (e.g. heat a stream then flash it).
+
+{
+  "task_type": "flowsheet",
+  "steps": [
+    {
+      "unit":              "heater" | "cooler",
+      "name":              "<string>",
+      "T_out_C":           <number>,
+      "pressure_drop_bar": 0.0
+    },
+    {
+      "unit":       "flash",
+      "name":       "<string>",
+      "flash_mode": "isothermal" | "adiabatic",
+      "T_C":        <number>,     ← isothermal only
+      "P_bar":      <number>
+    }
+  ],
+  "feed": {
+    "flow_kmol_h":   100.0,
+    "temperature_C": <number>,
+    "pressure_bar":  <number>
+  },
+  "components":       {"<component>": <mole_fraction>, ...},
+  "property_package": "<string>"
+}
+
+Rules for "flowsheet":
+- steps is an ordered list — first step receives the feed, each subsequent step receives the outlet of the previous.
+- Currently supported units: "heater", "cooler", "flash".
+- For "flash" steps, use flash_mode "isothermal" if the user specifies a drum temperature, "adiabatic" if not.
+- T_C in a flash step is the drum equilibrium temperature (isothermal only).
+- P_bar in a flash step is the drum pressure.
+- feed.pressure_bar must be >= the first unit op's outlet pressure.
+- flow_kmol_h defaults to 100.0 if not specified.
+
+
 === OUTPUT RULES (STRICT) ===
 - Respond with ONLY a raw JSON object. No markdown, no code fences, no explanation, no preamble.
 - Your entire response must be parseable by Python's json.loads() with no preprocessing.
@@ -174,6 +216,13 @@ Output: {"task_type": "flash", "flash_mode": "isothermal_PT_flash", "components"
 
 User: "Adiabatic flash drum for a 50/50 propane and n-butane mixture. Feed is 100 kmol/h at 60 C and 12 bar. Drum pressure is 6 bar. Use Peng-Robinson."
 Output: {"task_type": "flash", "flash_mode": "adiabatic_PT_flash", "components": {"Propane": 0.5, "n-Butane": 0.5}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 60.0, "pressure_bar": 12.0}, "flash_drum": {"pressure_bar": 6.0}, "property_package": "Peng-Robinson"}
+
+=== FLOWSHEET EXAMPLES ===
+User: "Heat a 50/50 propane/n-butane stream from 60C to 120C at 14 bar, then flash it at 120C and 6 bar. What are the vapor and liquid compositions?"
+Output: {"task_type": "flowsheet", "steps": [{"unit": "heater", "name": "H1", "T_out_C": 120.0, "pressure_drop_bar": 0.0}, {"unit": "flash", "name": "F1", "flash_mode": "isothermal", "T_C": 120.0, "P_bar": 6.0}], "feed": {"flow_kmol_h": 100.0, "temperature_C": 60.0, "pressure_bar": 14.0}, "components": {"Propane": 0.5, "n-Butane": 0.5}, "property_package": "PR"}
+
+User: "Cool ethanol/water from 100C to 40C at 2 bar, then flash at 1 atm."
+Output: {"task_type": "flowsheet", "steps": [{"unit": "cooler", "name": "C1", "T_out_C": 40.0, "pressure_drop_bar": 0.0}, {"unit": "flash", "name": "F1", "flash_mode": "isothermal", "T_C": 40.0, "P_bar": 1.01325}], "feed": {"flow_kmol_h": 100.0, "temperature_C": 100.0, "pressure_bar": 2.0}, "components": {"Ethanol": 0.5, "Water": 0.5}, "property_package": "NRTL"}
 
 === ERROR EXAMPLE ===
 User: "Txy for water"
