@@ -280,17 +280,23 @@ def run_full_pipeline(user_question: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("DWSIM-AI — Unified Pipeline (Flash + Txy)")
-    print("Supports: isothermal_PT_flash, adiabatic_PT_flash, txy\n")
-    print("Example prompts:")
-    print('  "Flash a 50/50 propane/n-butane mix at 60C and 12 bar, drum at 6 bar."')
-    print('  "Txy diagram for ethanol and water at 1 atm."')
-    print('  "Phase envelope for benzene and toluene at 2 bar."')
-    print()
+    print("DWSIM-AI — Unified Pipeline (Flash + Txy + Heat)")
+    print("Supports: isothermal_PT_flash, adiabatic_PT_flash, txy, heater, cooler")
+    print("Type 'stop', 'exit', or 'quit' to end the session.\n")
 
-    user_input = input("Your question: ").strip()
+    while True:
+        try:
+            user_input = input("Your question: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[INFO] Session ended.")
+            break
 
-    if not user_input:
-        print("[ERROR] No input provided. Exiting.")
-    else:
+        if not user_input:
+            continue
+
+        if user_input.lower() in ("stop", "exit", "quit"):
+            print("[INFO] Session ended.")
+            break
+
         run_full_pipeline(user_input)
+        print()
