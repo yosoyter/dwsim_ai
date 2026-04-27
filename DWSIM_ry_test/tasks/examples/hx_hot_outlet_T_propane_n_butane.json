@@ -1,0 +1,28 @@
+{
+  "task_type": "hx",
+  "calc_mode": "hot_outlet_T",
+  "components": {
+    "hot": {
+      "Propane": 0.5,
+      "n-Butane": 0.5
+    },
+    "cold": {
+      "Propane": 0.5,
+      "n-Butane": 0.5
+    }
+  },
+  "hot_feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 120.0,
+    "pressure_bar": 14.0
+  },
+  "cold_feed": {
+    "flow_kmol_h": 120.0,
+    "temperature_C": 30.0,
+    "pressure_bar": 10.0
+  },
+  "hot_outlet_T_C": 80.0,
+  "hot_pressure_drop_bar": 0.0,
+  "cold_pressure_drop_bar": 0.0,
+  "property_package": "PR"
+}

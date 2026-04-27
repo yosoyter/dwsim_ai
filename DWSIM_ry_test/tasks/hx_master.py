@@ -227,13 +227,14 @@ def run_hx_master(task: dict, output_block_fn, output_dir: str = OUTPUT_DIR):
     cold_feed_r = _extract_stream(cold_feed_obj, "COLD_FEED", cold_comp_names)
     hot_out_r   = _extract_stream(hot_out_obj,   "HOT_OUT",   hot_comp_names)
     cold_out_r  = _extract_stream(cold_out_obj,  "COLD_OUT",  cold_comp_names)
-    duty_r      = hx_duty_results(hx_obj)
+    duty_r      = hx_duty_results(hx_obj, hot_feed_r, hot_out_r)
 
     results = {
         "calc_mode":        task["calc_mode"],
         "property_package": pkg_tag,
         "hot_components":   hot_comp_names,
         "cold_components":  cold_comp_names,
+        "components":       list(dict.fromkeys(hot_comp_names + cold_comp_names)),
         "hot_feed":         hot_feed_r,
         "cold_feed":        cold_feed_r,
         "hot_outlet":       hot_out_r,

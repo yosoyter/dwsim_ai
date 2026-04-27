@@ -119,6 +119,65 @@ results = {
     }
 }
 
+For comp tasks, the results dict is:
+results = {
+    "comp_mode":        str,          # "compressor" or "expander"
+    "property_package": str,
+    "components":       list[str],
+
+    "feed": {
+        "stream":           "FEED",
+        "T_C":              float,
+        "P_bar":            float,
+        "molar_flow_molh":  float,
+        "enthalpy_kJkmol":  float,
+        "vapor_fraction":   float,
+        "x_<CompName>":     float,
+    },
+
+    "outlet": {
+        "stream":           "OUT",
+        "T_C":              float,
+        "P_bar":            float,
+        "molar_flow_molh":  float,
+        "enthalpy_kJkmol":  float,
+        "vapor_fraction":   float,
+        "x_<CompName>":     float,
+    },
+
+    "shaft_work": {
+        "shaft_work_kW":  float,   # positive = work IN (compressor), negative = work OUT (expander)
+        "shaft_work_kJh": float,
+        "isentropic_efficiency": float,
+    }
+}
+
+IMPORTANT: For comp tasks, use results["shaft_work"]["shaft_work_kW"] — NOT results["duty"].
+
+For hx tasks, the results dict is:
+results = {
+    "calc_mode":        str,          # "hot_outlet_T", "cold_outlet_T", or "duty"
+    "property_package": str,
+    "hot_components":   list[str],
+    "cold_components":  list[str],
+
+    "hot_feed":    { stream dict: T_C, P_bar, molar_flow_molh, vapor_fraction, x_<comp> },
+    "cold_feed":   { stream dict: T_C, P_bar, molar_flow_molh, vapor_fraction, x_<comp> },
+    "hot_outlet":  { stream dict: T_C, P_bar, molar_flow_molh, vapor_fraction, x_<comp> },
+    "cold_outlet": { stream dict: T_C, P_bar, molar_flow_molh, vapor_fraction, x_<comp> },
+
+    "duty": {
+        "duty_kW":  float,   # heat transferred hot → cold (positive)
+        "duty_kJh": float,
+        "LMTD_K":   float,
+    }
+}
+
+IMPORTANT: For hx tasks use results["hot_feed"], results["cold_feed"],
+results["hot_outlet"], results["cold_outlet"] — NOT "hot_inlet" or "cold_inlet".
+Also iterate components with results["hot_components"] for hot side
+and results["cold_components"] for cold side — NOT results["components"].
+
 === ALLOWED IMPORTS ===
 
 You may only use these standard library modules:

@@ -1,0 +1,16 @@
+{
+  "task_type": "comp",
+  "comp_mode": "compressor",
+  "components": {
+    "Propane": 0.5,
+    "n-Butane": 0.5
+  },
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 80.0,
+    "pressure_bar": 5.0
+  },
+  "P_out_bar": 20.0,
+  "efficiency": 0.75,
+  "property_package": "PR"
+}

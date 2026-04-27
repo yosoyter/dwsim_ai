@@ -207,8 +207,9 @@ def run_comp_master(task: dict, output_block_fn, output_dir: str = OUTPUT_DIR):
         "feed":             feed_result,
         "outlet":           outlet_result,
         "shaft_work": {
-            "shaft_work_kW":  round(work_kW, 2),
-            "shaft_work_kJh": round(work_kW * 3600, 2),
+            "shaft_work_kW":         round(work_kW, 2),
+            "shaft_work_kJh":        round(work_kW * 3600, 2),
+            "isentropic_efficiency": float(task.get("efficiency", 0.75)),
         },
     }
 
