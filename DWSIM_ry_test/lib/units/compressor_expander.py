@@ -240,10 +240,6 @@ def build_expander(
     print(f"[compressor_expander] Expander '{name}': "
           f"P_out = {P_out_bar:.2f} bar, efficiency = {efficiency:.2f}")
 
-    print(f"[debug] POut after set: {exp_obj.POut / 1e5:.3f} bar")
-    print(f"[debug] AdiabaticEfficiency after set: {exp_obj.AdiabaticEfficiency:.4f}")
-    print(f"[debug] CalcMode after set: {exp_obj.CalcMode}")
-
     return SimpleNamespace(
         obj           = exp_obj,
         outlet_stream = outlet_stream,
