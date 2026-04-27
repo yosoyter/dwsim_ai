@@ -115,6 +115,10 @@ Compressor wiring:
     connect(comp.energy_stream, comp.obj)   ← energy IN
     auto_layout()
 
+# CRITICAL: NEVER connect two MaterialStreams directly.
+# For isothermal flash after compressor/expander, set T and P on the unit op's
+# outlet_stream directly — do NOT create an intermediate stream.
+
 Expander wiring:
     connect(upstream_stream, exp.obj)
     connect(exp.obj, exp.outlet_stream)
@@ -134,6 +138,47 @@ For a Heater → Flash sequence, the heater outlet connects to the flash:
     connect(heater.energy_stream, heater.obj)
     auto_layout()
     connect(heater.outlet_stream, flash.obj)    # link heater outlet to flash inlet
+    connect(flash.obj, flash.vapor_stream)
+    connect(flash.obj, flash.liquid_stream)
+    connect(flash.energy_stream, flash.obj)
+    auto_layout()
+
+For a Compressor → Flash sequence (isothermal flash at flash T and P):
+    connect(feed, comp.obj)
+    connect(comp.obj, comp.outlet_stream)
+    connect(comp.energy_stream, comp.obj)   ← compressor: energy IN
+    auto_layout()
+    # Set isothermal flash conditions directly on the compressor outlet stream:
+    comp.outlet_stream.SetTemperature(f_step["T_C"] + 273.15)
+    comp.outlet_stream.SetPressure(f_step["P_bar"] * 1e5)
+    flash = add_flash(name=f_step["name"], x_pos=600, y_pos=300)
+    connect(comp.outlet_stream, flash.obj)
+    connect(flash.obj, flash.vapor_stream)
+    connect(flash.obj, flash.liquid_stream)
+    connect(flash.energy_stream, flash.obj)
+    auto_layout()
+
+For a HX → Flash sequence (cool hot stream then flash it):
+    # Build HX — cold feed is a separate add_feed using step["cold_feed"]
+    cold_feed = add_feed(
+        name        = "COLD_FEED",
+        T_C         = hx_step["cold_feed"]["temperature_C"],
+        P_bar       = hx_step["cold_feed"]["pressure_bar"],
+        flow_kmol_h = hx_step["cold_feed"].get("flow_kmol_h", 80.0),
+        comp_fracs  = {k: float(v) for k, v in hx_step["cold_components"].items()},
+    )
+    hx = build_hx(name=hx_step["name"], calc_mode=hx_step["calc_mode"],
+                  hot_outlet_T_C=hx_step.get("hot_outlet_T_C"))
+    connect(feed, hx.obj)                          # hot side in
+    connect(hx.obj, hx.hot_outlet_stream)          # hot side out
+    connect(cold_feed, hx.obj)                     # cold side in
+    connect(hx.obj, hx.cold_outlet_stream)         # cold side out
+    auto_layout()
+    # Set isothermal flash conditions on hot outlet directly (no intermediate stream):
+    hx.hot_outlet_stream.SetTemperature(f_step["T_C"] + 273.15)
+    hx.hot_outlet_stream.SetPressure(f_step["P_bar"] * 1e5)
+    flash = add_flash(name=f_step["name"], x_pos=650, y_pos=300)
+    connect(hx.hot_outlet_stream, flash.obj)
     connect(flash.obj, flash.vapor_stream)
     connect(flash.obj, flash.liquid_stream)
     connect(flash.energy_stream, flash.obj)
@@ -306,6 +351,62 @@ l_flow = l["molar_flow_molh"]
 total  = v_flow + l_flow
 print(f"\n  Vapor  flow : {v_flow:.1f} mol/h  ({100*v_flow/total:.1f}%)")
 print(f"  Liquid flow : {l_flow:.1f} mol/h  ({100*l_flow/total:.1f}%)")
+
+
+
+=== EXAMPLE 2 ===
+
+User asked: "Compress a 50/50 propane/n-butane vapor from 5 bar, 60°C to 20 bar, then flash at 20 bar and 100°C."
+
+Task JSON steps:
+  [{"unit": "compressor", "name": "C1", "P_out_bar": 20.0, "efficiency": 0.75},
+   {"unit": "flash", "name": "F1", "flash_mode": "isothermal", "T_C": 100.0, "P_bar": 20.0}]
+
+### ASSEMBLY BLOCK
+feed_cfg   = task["feed"]
+comp_fracs = {k: float(v) for k, v in task["components"].items()}
+steps      = task["steps"]
+
+feed = add_feed(
+    name        = "FEED",
+    T_C         = feed_cfg["temperature_C"],
+    P_bar       = feed_cfg["pressure_bar"],
+    flow_kmol_h = feed_cfg.get("flow_kmol_h", 100.0),
+    comp_fracs  = comp_fracs,
+)
+
+c_step = steps[0]
+comp = build_compressor(
+    name       = c_step["name"],
+    P_out_bar  = c_step["P_out_bar"],
+    efficiency = c_step.get("efficiency", 0.75),
+    x_pos=300, y_pos=300,
+)
+connect(feed, comp.obj)
+connect(comp.obj, comp.outlet_stream)
+connect(comp.energy_stream, comp.obj)
+auto_layout()
+
+f_step = steps[1]
+comp.outlet_stream.SetTemperature(f_step["T_C"] + 273.15)
+comp.outlet_stream.SetPressure(f_step["P_bar"] * 1e5)
+flash = add_flash(name=f_step["name"], x_pos=550, y_pos=300)
+connect(comp.outlet_stream, flash.obj)
+connect(flash.obj, flash.vapor_stream)
+connect(flash.obj, flash.liquid_stream)
+connect(flash.energy_stream, flash.obj)
+auto_layout()
+
+streams = {
+    "FEED":     feed,
+    "COMP_OUT": comp.outlet_stream,
+    "V":        flash.vapor_stream,
+    "L":        flash.liquid_stream,
+}
+
+### OUTPUT BLOCK
+s = results["streams"]
+...
 
 === REMEMBER ===
 - Return ONLY the two labeled sections. No extra text. No markdown fences. No def lines.

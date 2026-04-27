@@ -575,6 +575,15 @@ def run_flowsheet_master(task: dict, assembly_code: str, output_block_fn,
     comp_dict = {k: float(v) for k, v in task["components"].items()}
     comp_list = list(comp_dict.keys())
 
+    # For HX steps, cold-side components may differ — collect them all
+    extra_comps = []
+    for step in task.get("steps", []):
+        if step.get("unit") == "hx":
+            for c in step.get("cold_components", {}).keys():
+                if c not in comp_list and c not in extra_comps:
+                    extra_comps.append(c)
+    all_comps = comp_list + extra_comps
+
     raw_pkg = task.get("property_package")
     pkg_tag = _normalize_package(raw_pkg) if raw_pkg else _auto_select_package(comp_list)
 

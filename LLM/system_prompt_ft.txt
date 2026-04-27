@@ -197,7 +197,13 @@ connected unit operations in sequence (e.g. heat a stream then flash it).
       "cold_outlet_T_C": <number>,   ← if calc_mode == "cold_outlet_T"
       "duty_kW":         <number>,   ← if calc_mode == "duty"
       "hot_pressure_drop_bar":  0.0,
-      "cold_pressure_drop_bar": 0.0
+      "cold_pressure_drop_bar": 0.0,
+      "cold_feed": {
+        "flow_kmol_h":   80.0,
+        "temperature_C": <number>,
+        "pressure_bar":  <number>
+      },
+      "cold_components": {"<component>": <mole_fraction>, ...}
     },
     {
       "unit":       "flash",
@@ -221,6 +227,7 @@ Rules for "flowsheet":
 - Currently supported units: "heater", "cooler", "compressor", "expander", "hx", "flash".
 - For "compressor" and "expander" steps, P_out_bar is required; efficiency defaults to 0.75.
 - For "hx" steps, calc_mode is required. The upstream stream is treated as the hot side inlet; a separate cold feed must be defined in the assembly block.
+- For "hx" steps, cold_feed and cold_components are required on the step itself. Extract cold stream conditions and composition from the user's question.
 - For "flash" steps, use flash_mode "isothermal" if the user specifies a drum temperature, "adiabatic" if not.
 - T_C in a flash step is the drum equilibrium temperature (isothermal only).
 - P_bar in a flash step is the drum pressure.

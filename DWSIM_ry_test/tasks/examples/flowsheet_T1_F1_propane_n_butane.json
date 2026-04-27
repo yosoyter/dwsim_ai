@@ -1,0 +1,27 @@
+{
+  "task_type": "flowsheet",
+  "steps": [
+    {
+      "unit": "expander",
+      "name": "T1",
+      "P_out_bar": 6.0,
+      "efficiency": 0.75
+    },
+    {
+      "unit": "flash",
+      "name": "F1",
+      "flash_mode": "adiabatic",
+      "P_bar": 6.0
+    }
+  ],
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 150.0,
+    "pressure_bar": 20.0
+  },
+  "components": {
+    "Propane": 0.5,
+    "n-Butane": 0.5
+  },
+  "property_package": "PR"
+}

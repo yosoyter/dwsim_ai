@@ -1,0 +1,39 @@
+{
+  "task_type": "flowsheet",
+  "steps": [
+    {
+      "unit": "hx",
+      "name": "HX1",
+      "calc_mode": "hot_outlet_T",
+      "hot_outlet_T_C": 70.0,
+      "hot_pressure_drop_bar": 0.0,
+      "cold_pressure_drop_bar": 0.0,
+      "cold_feed": {
+        "flow_kmol_h": 80.0,
+        "temperature_C": 30.0,
+        "pressure_bar": 10.0
+      },
+      "cold_components": {
+        "Methane": 0.5,
+        "Ethane": 0.5
+      }
+    },
+    {
+      "unit": "flash",
+      "name": "F1",
+      "flash_mode": "isothermal",
+      "T_C": 70.0,
+      "P_bar": 14.0
+    }
+  ],
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 120.0,
+    "pressure_bar": 14.0
+  },
+  "components": {
+    "Propane": 0.5,
+    "n-Butane": 0.5
+  },
+  "property_package": "PR"
+}
