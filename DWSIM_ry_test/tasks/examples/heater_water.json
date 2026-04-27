@@ -1,0 +1,17 @@
+{
+  "task_type": "heat",
+  "heat_mode": "heater",
+  "components": {
+    "Water": 1.0
+  },
+  "feed": {
+    "flow_kmol_h": 100.0,
+    "temperature_C": 20.0,
+    "pressure_bar": 1.01325
+  },
+  "outlet": {
+    "temperature_C": 40.0,
+    "pressure_drop_bar": 0.0
+  },
+  "property_package": "NRTL"
+}

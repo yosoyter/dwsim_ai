@@ -312,11 +312,15 @@ def compressor_results(
     inlet_d  = _stream_dict(inlet_stream_obj,  f"{label}_IN")
     outlet_d = _stream_dict(outlet_stream_obj, f"{label}_OUT")
 
-    # Shaft work from enthalpy balance (more reliable than DeltaQ in headless mode)
-    H_in    = inlet_d["enthalpy_kJkmol"]
-    H_out   = outlet_d["enthalpy_kJkmol"]
-    F       = outlet_d["molar_flow_molh"]        # mol/h
-    work_kW = (H_out - H_in) * (F / 1000) / 3600  # kW  (+ve = energy added to stream)
+    # Shaft work directly from DWSIM solver result (W → kW)
+    try:
+        work_kW = float(unit_obj.DeltaQ)
+    except Exception:
+        # Fallback to enthalpy balance if DeltaQ unavailable
+        H_in    = inlet_d["enthalpy_kJkmol"]
+        H_out   = outlet_d["enthalpy_kJkmol"]
+        F       = outlet_d["molar_flow_molh"]
+        work_kW = (H_out - H_in) * (F / 1000) / 3600
 
     try:
         eta = float(unit_obj.AdiabaticEfficiency)

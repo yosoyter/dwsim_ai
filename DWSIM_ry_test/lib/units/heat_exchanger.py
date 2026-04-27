@@ -434,14 +434,18 @@ def hx_duty_results(hx_obj, inlet_results: dict = None, outlet_results: dict = N
 
     lmtd = 0.0
 
-    # Preferred: enthalpy balance from solved stream dicts
-    if inlet_results is not None and outlet_results is not None:
-        H_in    = inlet_results["enthalpy_kJkmol"]       # kJ/kmol
-        H_out   = outlet_results["enthalpy_kJkmol"]      # kJ/kmol
-        F       = outlet_results["molar_flow_molh"]      # mol/h
-        duty_kW = (H_out - H_in) * (F / 1000) / 3600    # kW
-    else:
+    # Preferred: read duty directly from DWSIM solver (W → kW)
+    try:
         duty_kW = _get(hx_obj.DeltaQ)
+    except Exception:
+        # Fallback: enthalpy balance
+        if inlet_results is not None and outlet_results is not None:
+            H_in    = inlet_results["enthalpy_kJkmol"]
+            H_out   = outlet_results["enthalpy_kJkmol"]
+            F       = outlet_results["molar_flow_molh"]
+            duty_kW = (H_out - H_in) * (F / 1000) / 3600
+        else:
+            duty_kW = 0.0
 
     # LMTD for two-stream HX only
     try:

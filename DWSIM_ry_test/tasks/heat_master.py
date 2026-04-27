@@ -184,23 +184,22 @@ def _build_heat(task: dict, interf, sim, comp_names: list, pkg_tag: str):
     print(f"[heat_master] {heat_mode.capitalize()} solved.")
 
     feed_result = _extract_stream(feed_obj, "FEED", comp_names)
-    return feed_result, feed_obj, outlet_obj
+    return feed_result, feed_obj, outlet_obj, uo
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  DUTY CALCULATOR  (enthalpy balance — same approach as test_heat_exchanger.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _calc_duty(feed_result: dict, outlet_result: dict) -> dict:
+def _calc_duty(uo_obj) -> dict:
     """
-    Computes heat duty from enthalpy balance.
-      Q [kW] = (H_out - H_in) [kJ/kmol] × F [mol/h] / 1000 / 3600
-    Positive = heat added (heater), Negative = heat removed (cooler).
+    Reads heat duty directly from the solved DWSIM heater/cooler object.
+    DeltaQ is in W; positive = heat added (heater), negative = heat removed (cooler).
     """
-    H_in  = feed_result["enthalpy_kJkmol"]
-    H_out = outlet_result["enthalpy_kJkmol"]
-    F     = outlet_result["molar_flow_molh"]   # mol/h
-    Q_kW  = (H_out - H_in) * (F / 1000) / 3600
+    try:
+        Q_kW = float(uo_obj.DeltaQ)
+    except Exception:
+        Q_kW = 0.0
     return {
         "duty_kW":  round(Q_kW, 4),
         "duty_kJh": round(Q_kW * 3600, 2),
@@ -262,12 +261,12 @@ def run_heat_master(task: dict, output_block_fn, output_dir: str = OUTPUT_DIR):
 
     select_property_package(sim, pkg_tag)
 
-    feed_result, feed_obj, outlet_obj = _build_heat(
+    feed_result, feed_obj, outlet_obj, uo_obj = _build_heat(
         task, interf, sim, comp_names, pkg_tag
     )
 
     outlet_result = _extract_stream(outlet_obj, "OUT", comp_names)
-    duty          = _calc_duty(feed_result, outlet_result)
+    duty          = _calc_duty(uo_obj)
 
     results = {
         "heat_mode":        heat_mode,
