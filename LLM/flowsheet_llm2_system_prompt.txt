@@ -36,6 +36,29 @@ build_cooler(name, T_out_C, pressure_drop_bar=0.0, x_pos=300, y_pos=300)
   Add a Cooler unit op that lowers a stream to T_out_C.
   Returns: SimpleNamespace with same attributes as build_heater.
 
+build_compressor(name, P_out_bar, efficiency=0.75, x_pos=300, y_pos=300)
+  Add a Compressor unit op that raises a stream to P_out_bar.
+  Returns: SimpleNamespace with:
+    .obj            — wire upstream stream INTO this
+    .outlet_stream  — wire this downstream
+    .energy_stream  — wire this INTO .obj  (energy IN)
+
+build_expander(name, P_out_bar, efficiency=0.75, x_pos=300, y_pos=300)
+  Add an Expander (turbine) unit op that drops a stream to P_out_bar.
+  Returns: SimpleNamespace with:
+    .obj            — wire upstream stream INTO this
+    .outlet_stream  — wire this downstream
+    .energy_stream  — wire FROM .obj INTO this  (energy OUT)
+
+build_hx(name, calc_mode, hot_outlet_T_C=None, cold_outlet_T_C=None, duty_kW=None,
+         hot_pressure_drop_bar=0.0, cold_pressure_drop_bar=0.0, x_pos=300, y_pos=300)
+  Add a two-stream shell-and-tube Heat Exchanger.
+  calc_mode: "hot_outlet_T" | "cold_outlet_T" | "duty"
+  Returns: SimpleNamespace with:
+    .obj                — HX DWSIM object
+    .hot_outlet_stream  — hot side outlet MaterialStream
+    .cold_outlet_stream — cold side outlet MaterialStream
+
 add_flash(name, x_pos=500, y_pos=300)
   Add a Flash Drum (Vessel) unit op.
   Returns: SimpleNamespace with:
@@ -86,6 +109,25 @@ Flash drum wiring (always in this order):
     connect(flash.energy_stream, flash.obj)     # energy  → unit op
     auto_layout()
 
+Compressor wiring:
+    connect(upstream_stream, comp.obj)
+    connect(comp.obj, comp.outlet_stream)
+    connect(comp.energy_stream, comp.obj)   ← energy IN
+    auto_layout()
+
+Expander wiring:
+    connect(upstream_stream, exp.obj)
+    connect(exp.obj, exp.outlet_stream)
+    connect(exp.obj, exp.energy_stream)     ← energy OUT (reversed vs compressor)
+    auto_layout()
+
+Heat exchanger wiring (always wire hot side first, then cold side):
+    connect(hot_feed, hx.obj)
+    connect(hx.obj, hx.hot_outlet_stream)
+    connect(cold_feed, hx.obj)
+    connect(hx.obj, hx.cold_outlet_stream)
+    auto_layout()
+
 For a Heater → Flash sequence, the heater outlet connects to the flash:
     connect(upstream_stream, heater.obj)
     connect(heater.obj, heater.outlet_stream)
@@ -125,10 +167,13 @@ The task dict is available as `task`. Always read feed conditions and step param
     )
 
 Each step in task["steps"] has:
-  - "unit":              "heater" | "cooler" | "flash"
+  - "unit":              "heater" | "cooler" | "compressor" | "expander" | "hx" | "flash"
   - "name":              str  (label for this unit op)
-  - For heater/cooler: "T_out_C", "pressure_drop_bar"
-  - For flash:         "flash_mode" ("isothermal" | "adiabatic"), "T_C" (isothermal only), "P_bar"
+  - For heater/cooler:        "T_out_C", "pressure_drop_bar"
+  - For compressor/expander:  "P_out_bar", "efficiency" (default 0.75)
+  - For hx:                   "calc_mode", "hot_outlet_T_C" | "cold_outlet_T_C" | "duty_kW",
+                               "hot_pressure_drop_bar", "cold_pressure_drop_bar"
+  - For flash:                "flash_mode" ("isothermal" | "adiabatic"), "T_C" (isothermal only), "P_bar"
 
 For isothermal flash, the drum pressure is set by giving the feed stream the drum T and P.
 The flash drum inherits T and P from its inlet stream.

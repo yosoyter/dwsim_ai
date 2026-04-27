@@ -250,6 +250,61 @@ def _make_build_cooler(sim):
                    x_pos=x_pos, y_pos=y_pos)
     return build_cooler
 
+def _make_build_compressor(sim):
+    def build_compressor(name: str, P_out_bar: float, efficiency: float = 0.75,
+                         x_pos: int = 300, y_pos: int = 300):
+        """
+        Add a Compressor unit op.
+        Returns SimpleNamespace with .obj, .outlet_stream, .energy_stream
+        Wiring: connect(feed, comp.obj); connect(comp.obj, comp.outlet_stream);
+                connect(comp.energy_stream, comp.obj)
+        """
+        from DWSIM_ry_test.lib.units.compressor_expander import build_compressor as _bc
+        return _bc(sim, name=name, P_out_bar=P_out_bar, efficiency=efficiency,
+                   x_pos=x_pos, y_pos=y_pos)
+    return build_compressor
+
+
+def _make_build_expander(sim):
+    def build_expander(name: str, P_out_bar: float, efficiency: float = 0.75,
+                       x_pos: int = 300, y_pos: int = 300):
+        """
+        Add an Expander unit op.
+        Returns SimpleNamespace with .obj, .outlet_stream, .energy_stream
+        Wiring: connect(feed, exp.obj); connect(exp.obj, exp.outlet_stream);
+                connect(exp.obj, exp.energy_stream)   ← note: OUT not IN
+        """
+        from DWSIM_ry_test.lib.units.compressor_expander import build_expander as _be
+        return _be(sim, name=name, P_out_bar=P_out_bar, efficiency=efficiency,
+                   x_pos=x_pos, y_pos=y_pos)
+    return build_expander
+
+def _make_build_hx(sim):
+    def build_hx(name: str, calc_mode: str,
+                 hot_outlet_T_C: float = None,
+                 cold_outlet_T_C: float = None,
+                 duty_kW: float = None,
+                 hot_pressure_drop_bar: float = 0.0,
+                 cold_pressure_drop_bar: float = 0.0,
+                 x_pos: int = 300, y_pos: int = 300):
+        """
+        Add a two-stream Heat Exchanger unit op.
+        Returns SimpleNamespace with .obj, .hot_outlet_stream, .cold_outlet_stream
+        Wiring:
+            connect(hot_feed, hx.obj)
+            connect(hx.obj, hx.hot_outlet_stream)
+            connect(cold_feed, hx.obj)
+            connect(hx.obj, hx.cold_outlet_stream)
+        """
+        from DWSIM_ry_test.lib.units.heat_exchanger import build_hx as _bh
+        return _bh(sim, name=name, calc_mode=calc_mode,
+                   hot_outlet_T_C=hot_outlet_T_C,
+                   cold_outlet_T_C=cold_outlet_T_C,
+                   duty_kW=duty_kW,
+                   hot_pressure_drop_bar=hot_pressure_drop_bar,
+                   cold_pressure_drop_bar=cold_pressure_drop_bar,
+                   x_pos=x_pos, y_pos=y_pos)
+    return build_hx
 
 def _make_add_flash(sim):
     """Factory: returns add_flash() bound to this sim."""
@@ -405,6 +460,22 @@ def _exec_assembly_block(assembly_code: str, sim, comp_names: list,
       add_stream   — function
       build_heater — function
       build_cooler — function
+      build_compressor — function  (name, P_out_bar, efficiency, x_pos, y_pos)
+                         → SimpleNamespace(.obj, .outlet_stream, .energy_stream)
+                         Wiring: connect(feed, comp.obj); connect(comp.obj, comp.outlet_stream);
+                                 connect(comp.energy_stream, comp.obj)
+
+      build_expander   — function  (name, P_out_bar, efficiency, x_pos, y_pos)
+                         → SimpleNamespace(.obj, .outlet_stream, .energy_stream)
+                         Wiring: connect(feed, exp.obj); connect(exp.obj, exp.outlet_stream);
+                                 connect(exp.obj, exp.energy_stream)   ← energy OUT
+
+      build_hx         — function  (name, calc_mode, hot_outlet_T_C, cold_outlet_T_C,
+                                    duty_kW, hot_pressure_drop_bar, cold_pressure_drop_bar,
+                                    x_pos, y_pos)
+                         → SimpleNamespace(.obj, .hot_outlet_stream, .cold_outlet_stream)
+                         Wiring: connect(hot_feed, hx.obj); connect(hx.obj, hx.hot_outlet_stream);
+                                 connect(cold_feed, hx.obj); connect(hx.obj, hx.cold_outlet_stream)
       add_flash    — function
       connect      — function
       extract      — function (for use AFTER solve — but assembly block runs before solve)
@@ -422,7 +493,7 @@ def _exec_assembly_block(assembly_code: str, sim, comp_names: list,
     flowsheet_master.py will call solve, then call extract() on each stream in `streams`.
     """
     indented = textwrap.indent(assembly_code, "    ")
-    fn_source = f"def assembly_block(sim, task, comp_names, add_feed, add_stream, build_heater, build_cooler, add_flash, add_valve, connect, calc_duty, extract, auto_layout):\n{indented}\n    return streams\n"
+    fn_source = f"def assembly_block(sim, task, comp_names, add_feed, add_stream, build_heater, build_cooler, build_compressor, build_expander, build_hx, add_flash, add_valve, connect, calc_duty, extract, auto_layout):\n{indented}\n    return streams\n"
 
     namespace = {}
     exec(fn_source, namespace)
@@ -440,6 +511,9 @@ def _exec_assembly_block(assembly_code: str, sim, comp_names: list,
             add_stream   = _make_add_stream(sim),
             build_heater = _make_build_heater(sim),
             build_cooler = _make_build_cooler(sim),
+            build_compressor = _make_build_compressor(sim),
+            build_expander   = _make_build_expander(sim),
+            build_hx     = _make_build_hx(sim),
             add_flash    = _make_add_flash(sim),
             add_valve    = _make_add_valve(sim),
             connect      = _make_connect(sim),

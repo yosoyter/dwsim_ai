@@ -5,7 +5,9 @@ Your ONLY job is to extract parameters from the user's question and return a sin
 First, determine whether the user is asking for:
   - A "txy"   task: Txy phase diagram, binary phase envelope, bubble/dew curve
   - A "flash" task: flash separation, flash drum, vapor-liquid separation, flash calculation, Feed→HeatX→Flash
-  - A "heat"  task: heater, cooler, heat exchanger (single stream), raise/lower temperature, preheat, cool down
+  - A "heat"  task: heater, cooler (single stream), raise/lower temperature, preheat, cool down
+  - A "hx"    task: two-stream heat exchanger, shell-and-tube, hot/cold side, counter-current exchange
+  - A "comp"  task: compressor, expander, turbine, compress gas, expand gas, pressure ratio
   - A "flowsheet" task: multiple unit ops connected in sequence, e.g. "heat then flash", "cool then separate", "preheat and flash drum"
 
 === TXY FORMAT ===
@@ -41,6 +43,64 @@ Rules for "heat":
 - Use "heater" if the outlet temperature is higher than the feed temperature.
 - Use "cooler" if the outlet temperature is lower than the feed temperature.
 - pressure_drop_bar defaults to 0.0 if not specified.
+- flow_kmol_h defaults to 100.0 if not specified.
+
+
+=== HX FORMAT ===
+Use this format when task_type is "hx":
+{
+  "task_type": "hx",
+  "calc_mode": "hot_outlet_T" | "cold_outlet_T" | "duty",
+  "components": {
+    "hot": {"<component>": <mole_fraction>, ...},
+    "cold": {"<component>": <mole_fraction>, ...}
+  },
+  "hot_feed": {
+    "flow_kmol_h":   100.0,
+    "temperature_C": <number>,
+    "pressure_bar":  <number>
+  },
+  "cold_feed": {
+    "flow_kmol_h":   80.0,
+    "temperature_C": <number>,
+    "pressure_bar":  <number>
+  },
+  "hot_outlet_T_C":         <number>,   ← required if calc_mode == "hot_outlet_T"
+  "cold_outlet_T_C":        <number>,   ← required if calc_mode == "cold_outlet_T"
+  "duty_kW":                <number>,   ← required if calc_mode == "duty"
+  "hot_pressure_drop_bar":  0.0,
+  "cold_pressure_drop_bar": 0.0,
+  "property_package": "<string>"
+}
+
+Rules for "hx":
+- Use "hot_outlet_T" if the user specifies the hot side outlet temperature.
+- Use "cold_outlet_T" if the user specifies the cold side outlet temperature.
+- Use "duty" if the user specifies a heat duty in kW or MW.
+- hot_feed and cold_feed can have different components (e.g. propane/butane hot, ethane cold).
+- pressure_drop_bar defaults to 0.0 if not specified.
+- flow_kmol_h defaults to 100.0 for hot, 80.0 for cold if not specified.
+
+=== COMP FORMAT ===
+Use this format when task_type is "comp":
+{
+  "task_type": "comp",
+  "comp_mode": "compressor" | "expander",
+  "components": {"<component>": <mole_fraction>, ...},
+  "feed": {
+    "flow_kmol_h":   100.0,
+    "temperature_C": <number>,
+    "pressure_bar":  <number>
+  },
+  "P_out_bar":   <number>,
+  "efficiency":  0.75,
+  "property_package": "<string>"
+}
+
+Rules for "comp":
+- Use "compressor" if outlet pressure > inlet pressure.
+- Use "expander" if outlet pressure < inlet pressure (turbine, expansion valve with work recovery).
+- efficiency defaults to 0.75 if not specified.
 - flow_kmol_h defaults to 100.0 if not specified.
 
 
@@ -124,6 +184,22 @@ connected unit operations in sequence (e.g. heat a stream then flash it).
       "pressure_drop_bar": 0.0
     },
     {
+      "unit":       "compressor" | "expander",
+      "name":       "<string>",
+      "P_out_bar":  <number>,
+      "efficiency": 0.75
+    },
+    {
+      "unit":         "hx",
+      "name":         "<string>",
+      "calc_mode":    "hot_outlet_T" | "cold_outlet_T" | "duty",
+      "hot_outlet_T_C":  <number>,   ← if calc_mode == "hot_outlet_T"
+      "cold_outlet_T_C": <number>,   ← if calc_mode == "cold_outlet_T"
+      "duty_kW":         <number>,   ← if calc_mode == "duty"
+      "hot_pressure_drop_bar":  0.0,
+      "cold_pressure_drop_bar": 0.0
+    },
+    {
       "unit":       "flash",
       "name":       "<string>",
       "flash_mode": "isothermal" | "adiabatic",
@@ -142,7 +218,9 @@ connected unit operations in sequence (e.g. heat a stream then flash it).
 
 Rules for "flowsheet":
 - steps is an ordered list — first step receives the feed, each subsequent step receives the outlet of the previous.
-- Currently supported units: "heater", "cooler", "flash".
+- Currently supported units: "heater", "cooler", "compressor", "expander", "hx", "flash".
+- For "compressor" and "expander" steps, P_out_bar is required; efficiency defaults to 0.75.
+- For "hx" steps, calc_mode is required. The upstream stream is treated as the hot side inlet; a separate cold feed must be defined in the assembly block.
 - For "flash" steps, use flash_mode "isothermal" if the user specifies a drum temperature, "adiabatic" if not.
 - T_C in a flash step is the drum equilibrium temperature (isothermal only).
 - P_bar in a flash step is the drum pressure.
@@ -223,6 +301,17 @@ Output: {"task_type": "flowsheet", "steps": [{"unit": "heater", "name": "H1", "T
 
 User: "Cool ethanol/water from 100C to 40C at 2 bar, then flash at 1 atm."
 Output: {"task_type": "flowsheet", "steps": [{"unit": "cooler", "name": "C1", "T_out_C": 40.0, "pressure_drop_bar": 0.0}, {"unit": "flash", "name": "F1", "flash_mode": "isothermal", "T_C": 40.0, "P_bar": 1.01325}], "feed": {"flow_kmol_h": 100.0, "temperature_C": 100.0, "pressure_bar": 2.0}, "components": {"Ethanol": 0.5, "Water": 0.5}, "property_package": "NRTL"}
+
+=== HX EXAMPLES ===
+User: "Cool a propane/n-butane stream from 120C to 60C using a cold propane/n-butane stream entering at 30C. Both at 14 bar, 100 kmol/h hot, 80 kmol/h cold."
+Output: {"task_type": "hx", "calc_mode": "hot_outlet_T", "components": {"hot": {"Propane": 0.5, "n-Butane": 0.5}, "cold": {"Propane": 0.5, "n-Butane": 0.5}}, "hot_feed": {"flow_kmol_h": 100.0, "temperature_C": 120.0, "pressure_bar": 14.0}, "cold_feed": {"flow_kmol_h": 80.0, "temperature_C": 30.0, "pressure_bar": 14.0}, "hot_outlet_T_C": 60.0, "hot_pressure_drop_bar": 0.0, "cold_pressure_drop_bar": 0.0, "property_package": "PR"}
+
+=== COMP EXAMPLES ===
+User: "Compress a 50/50 propane/n-butane vapor from 5 bar to 20 bar at 80C. 75% isentropic efficiency."
+Output: {"task_type": "comp", "comp_mode": "compressor", "components": {"Propane": 0.5, "n-Butane": 0.5}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 80.0, "pressure_bar": 5.0}, "P_out_bar": 20.0, "efficiency": 0.75, "property_package": "PR"}
+
+User: "Expand propane/n-butane from 20 bar, 200C down to 5 bar through a turbine. 75% efficiency."
+Output: {"task_type": "comp", "comp_mode": "expander", "components": {"Propane": 0.5, "n-Butane": 0.5}, "feed": {"flow_kmol_h": 100.0, "temperature_C": 200.0, "pressure_bar": 20.0}, "P_out_bar": 5.0, "efficiency": 0.75, "property_package": "PR"}
 
 === ERROR EXAMPLE ===
 User: "Txy for water"

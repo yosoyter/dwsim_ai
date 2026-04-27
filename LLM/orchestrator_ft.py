@@ -61,6 +61,22 @@ REQUIRED_FIELDS = {
         "outlet",
         "property_package",
     ],
+    "hx": [
+        "task_type",
+        "calc_mode",
+        "components",
+        "hot_feed",
+        "cold_feed",
+        "property_package",
+    ],
+    "comp": [
+        "task_type",
+        "comp_mode",
+        "components",
+        "feed",
+        "P_out_bar",
+        "property_package",
+    ],
     "flowsheet": [
         "task_type",
         "steps",
@@ -241,7 +257,7 @@ def validate_payload(payload: dict) -> bool:
             print("[VALIDATION] 'steps' must be a list of at least 2 unit ops for flowsheet task.")
             return False
 
-        valid_units = {"heater", "cooler", "flash"}
+        valid_units = {"heater", "cooler", "compressor", "expander", "hx", "flash"}
         for i, step in enumerate(steps):
             if step.get("unit") not in valid_units:
                 print(f"[VALIDATION] Step {i}: unknown unit '{step.get('unit')}'. Valid: {valid_units}")
@@ -251,6 +267,12 @@ def validate_payload(payload: dict) -> bool:
                 return False
             if step["unit"] == "flash" and "P_bar" not in step:
                 print(f"[VALIDATION] Step {i} (flash): missing P_bar")
+                return False
+            if step["unit"] in ("compressor", "expander") and "P_out_bar" not in step:
+                print(f"[VALIDATION] Step {i} ({step['unit']}): missing P_out_bar")
+                return False
+            if step["unit"] == "hx" and "calc_mode" not in step:
+                print(f"[VALIDATION] Step {i} (hx): missing calc_mode")
                 return False
 
         feed = payload.get("feed", {})
@@ -267,6 +289,40 @@ def validate_payload(payload: dict) -> bool:
         total = sum(comps.values())
         if abs(total - 1.0) > 0.02:
             print(f"[VALIDATION] Component mole fractions sum to {total:.3f}, not 1.0")
+            return False
+
+    # HX-specific checks
+    if task_type == "hx":
+        calc_mode = payload.get("calc_mode")
+        if calc_mode not in ("hot_outlet_T", "cold_outlet_T", "duty"):
+            print(f"[VALIDATION] hx calc_mode must be hot_outlet_T/cold_outlet_T/duty, got: '{calc_mode}'")
+            return False
+        if calc_mode == "hot_outlet_T" and "hot_outlet_T_C" not in payload:
+            print("[VALIDATION] hx: missing hot_outlet_T_C for calc_mode='hot_outlet_T'")
+            return False
+        if calc_mode == "cold_outlet_T" and "cold_outlet_T_C" not in payload:
+            print("[VALIDATION] hx: missing cold_outlet_T_C for calc_mode='cold_outlet_T'")
+            return False
+        if calc_mode == "duty" and "duty_kW" not in payload:
+            print("[VALIDATION] hx: missing duty_kW for calc_mode='duty'")
+            return False
+
+    # Comp-specific checks
+    if task_type == "comp":
+        comp_mode = payload.get("comp_mode")
+        if comp_mode not in ("compressor", "expander"):
+            print(f"[VALIDATION] comp_mode must be 'compressor' or 'expander', got: '{comp_mode}'")
+            return False
+        feed = payload.get("feed", {})
+        for f in ("temperature_C", "pressure_bar"):
+            if f not in feed:
+                print(f"[VALIDATION] Missing feed.{f} for comp task")
+                return False
+        if comp_mode == "compressor" and payload["P_out_bar"] <= feed["pressure_bar"]:
+            print("[VALIDATION] compressor P_out_bar must be greater than feed.pressure_bar")
+            return False
+        if comp_mode == "expander" and payload["P_out_bar"] >= feed["pressure_bar"]:
+            print("[VALIDATION] expander P_out_bar must be less than feed.pressure_bar")
             return False
 
 
@@ -320,6 +376,18 @@ def save_payload(payload: dict) -> str:
         )
         step_slug = "_".join(s.get("name", s["unit"]) for s in payload["steps"])
         filename = f"flowsheet_{step_slug}_{comp_slug}.json"
+
+    elif task_type == "hx":
+        hot_comps  = list(payload["components"]["hot"].keys())
+        comp_slug  = "_".join(c.lower().replace(" ", "_").replace("-", "_") for c in hot_comps)
+        mode_slug  = payload.get("calc_mode", "hx")
+        filename   = f"hx_{mode_slug}_{comp_slug}.json"
+
+    elif task_type == "comp":
+        comps      = list(payload["components"].keys())
+        comp_slug  = "_".join(c.lower().replace(" ", "_").replace("-", "_") for c in comps)
+        comp_mode  = payload.get("comp_mode", "comp")
+        filename   = f"{comp_mode}_{comp_slug}.json"
 
     else:
         filename = f"task_{task_type}.json"

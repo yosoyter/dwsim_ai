@@ -344,6 +344,50 @@ def run_full_pipeline(user_question: str) -> None:
 
         print("\n[llm2] Pipeline complete.")
         return
+    
+    # ── Comp: route to comp_master with LLM #2 code generation ───────────────
+    if task_json.get("task_type") == "comp":
+        print("\n[llm2] Comp task detected — generating output block for compressor/expander.")
+        generated_code = generate_output_block_code(user_question, task_json)
+
+        print("\n[LLM #2] Generated output_block code:")
+        print("-" * 40)
+        print(generated_code)
+        print("-" * 40)
+
+        if not validate_output_block(generated_code):
+            print("[llm2] Aborting: generated code failed safety check.")
+            return
+
+        output_block_fn = build_output_block_fn(generated_code)
+
+        from DWSIM_ry_test.tasks.comp_master import run_comp_master
+        run_comp_master(task_json, output_block_fn)
+
+        print("\n[llm2] Pipeline complete.")
+        return
+
+    # ── HX: route to hx_master with LLM #2 code generation ──────────────────
+    if task_json.get("task_type") == "hx":
+        print("\n[llm2] HX task detected — generating output block for heat exchanger.")
+        generated_code = generate_output_block_code(user_question, task_json)
+
+        print("\n[LLM #2] Generated output_block code:")
+        print("-" * 40)
+        print(generated_code)
+        print("-" * 40)
+
+        if not validate_output_block(generated_code):
+            print("[llm2] Aborting: generated code failed safety check.")
+            return
+
+        output_block_fn = build_output_block_fn(generated_code)
+
+        from DWSIM_ry_test.tasks.hx_master import run_hx_master
+        run_hx_master(task_json, output_block_fn)
+
+        print("\n[llm2] Pipeline complete.")
+        return
 
     # ── Step 2: LLM #2 ────────────────────────────────────────────────────────
     generated_code = generate_output_block_code(user_question, task_json)
@@ -372,8 +416,8 @@ def run_full_pipeline(user_question: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("DWSIM-AI — Unified Pipeline (Flash + Txy + Heat)")
-    print("Supports: isothermal_PT_flash, adiabatic_PT_flash, txy, heater, cooler")
+    print("DWSIM-AI — Unified Pipeline")
+    print("Supports: txy, flash, heater, cooler, compressor, expander, heat exchanger, flowsheet")
     print("Type 'stop', 'exit', or 'quit' to end the session.\n")
 
     while True:
