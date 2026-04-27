@@ -5,7 +5,7 @@
       "unit": "hx",
       "name": "HX1",
       "calc_mode": "hot_outlet_T",
-      "hot_outlet_T_C": 70.0,
+      "hot_outlet_T_C": 100.0,
       "hot_pressure_drop_bar": 0.0,
       "cold_pressure_drop_bar": 0.0,
       "cold_feed": {
@@ -22,7 +22,7 @@
       "unit": "flash",
       "name": "F1",
       "flash_mode": "isothermal",
-      "T_C": 70.0,
+      "T_C": 100.0,
       "P_bar": 14.0
     }
   ],

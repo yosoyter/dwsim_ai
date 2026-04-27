@@ -591,7 +591,7 @@ def run_flowsheet_master(task: dict, assembly_code: str, output_block_fn,
     interf = init_dwsim(DWSIM_PATH)
     sim    = create_flowsheet(interf)
 
-    for comp in comp_list:
+    for comp in all_comps:
         sim.AddCompound(comp)
     comp_names = list(sim.SelectedCompounds.Keys)
 
@@ -609,8 +609,11 @@ def run_flowsheet_master(task: dict, assembly_code: str, output_block_fn,
     Settings.SolverMode = 0
     errors = interf.CalculateFlowsheet4(sim)
     if errors is not None and len(errors) > 0:
-        raise RuntimeError("[flowsheet_master] Solver errors:\n" +
-                           "\n".join(str(e) for e in errors))
+        err_str = "\n".join(str(e) for e in errors)
+        print(f"\n[flowsheet_master] SOLVER ERROR — flowsheet could not be solved:\n{err_str}")
+        print("\n[flowsheet_master] Hint: Check thermal feasibility (cold stream capacity), "
+              "pressure consistency, and feed conditions.")
+        return
     print("[flowsheet_master] Flowsheet solved.")
 
     # ── Extract results ───────────────────────────────────────────────────────
