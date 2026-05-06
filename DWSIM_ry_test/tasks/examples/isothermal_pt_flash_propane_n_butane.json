@@ -7,12 +7,12 @@
   },
   "feed": {
     "flow_kmol_h": 100.0,
-    "temperature_C": 60.0,
-    "pressure_bar": 14.0
+    "temperature_C": 50.0,
+    "pressure_bar": 10.0
   },
   "flash_drum": {
-    "temperature_C": 60.0,
-    "pressure_bar": 11.0
+    "temperature_C": 50.0,
+    "pressure_bar": 10.0
   },
   "property_package": "PR"
 }

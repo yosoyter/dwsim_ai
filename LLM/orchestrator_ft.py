@@ -208,12 +208,12 @@ def validate_payload(payload: dict) -> bool:
 
         # Mode-specific consistency checks
         if flash_mode == "isothermal_PT_flash":
-            if drum["pressure_bar"] >= feed["pressure_bar"]:
+            if drum["pressure_bar"] > feed["pressure_bar"]:
                 print("[VALIDATION] flash_drum.pressure_bar must be less than feed.pressure_bar.")
                 return False
 
         elif flash_mode == "adiabatic_PT_flash":
-            if drum["pressure_bar"] >= feed["pressure_bar"]:
+            if drum["pressure_bar"] > feed["pressure_bar"]:
                 print("[VALIDATION] flash_drum.pressure_bar must be less than feed.pressure_bar.")
                 return False
 

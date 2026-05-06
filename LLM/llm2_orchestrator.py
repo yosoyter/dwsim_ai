@@ -45,6 +45,11 @@ FLOWSHEET_LLM2_SYSTEM_PROMPT_PATH = os.path.join(_HERE, "flowsheet_llm2_system_p
 with open(FLOWSHEET_LLM2_SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
     FLOWSHEET_LLM2_SYSTEM_PROMPT = f.read()
 
+GUARD_PROMPT_PATH = os.path.join(_HERE, "guard_prompt.txt")
+
+with open(GUARD_PROMPT_PATH, "r", encoding="utf-8") as f:
+    GUARD_SYSTEM_PROMPT = f.read()
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  STEP 1: Run LLM #1 to get the task JSON
 #  (reuses orchestrator_ft.py — no duplication)
@@ -248,6 +253,27 @@ def build_output_block_fn(code: str):
     return namespace["output_block"]
 
 
+# Guard query function for prompt evaluation
+def guard_query(user_question: str) -> dict:
+    """
+    Calls the guard LLM to evaluate whether the query is valid/relevant.
+    Returns dict with keys: verdict, reason, followup
+    """
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    msg = client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=256,
+        system=GUARD_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": user_question}],
+    )
+    raw = msg.content[0].text.strip()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # If the guard LLM misbehaves, default to pass so pipeline isn't blocked
+        return {"verdict": "pass", "reason": "Guard parse error — defaulting to pass.", "followup": None}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  STEP 5: Full pipeline
 # ─────────────────────────────────────────────────────────────────────────────
@@ -429,10 +455,27 @@ if __name__ == "__main__":
 
         if not user_input:
             continue
-
         if user_input.lower() in ("stop", "exit", "quit"):
             print("[INFO] Session ended.")
             break
 
+        # ── Guard check ──────────────────────────────────────────────────────
+        print("[guard] Evaluating query...")
+        guard = guard_query(user_input)
+        verdict = guard.get("verdict", "pass")
+
+        if verdict == "reject":
+            print(f"[guard] Query rejected: {guard.get('reason', '')}")
+            print("        This assistant handles flash, heat exchanger, compressor, expander, and flowsheet simulations only.")
+            print()
+            continue
+
+        if verdict == "clarify":
+            print(f"[guard] More info needed: {guard.get('reason', '')}")
+            print(f"        {guard.get('followup', 'Could you provide more details?')}")
+            print()
+            continue
+
+        # verdict == "pass" — proceed
         run_full_pipeline(user_input)
         print()
