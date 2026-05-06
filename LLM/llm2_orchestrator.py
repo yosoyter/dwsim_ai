@@ -267,10 +267,14 @@ def guard_query(user_question: str) -> dict:
         messages=[{"role": "user", "content": user_question}],
     )
     raw = msg.content[0].text.strip()
+    #print(f"[guard] Raw response: {raw}")
+    # Strip markdown code fences if present
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw.strip())
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # If the guard LLM misbehaves, default to pass so pipeline isn't blocked
         return {"verdict": "pass", "reason": "Guard parse error — defaulting to pass.", "followup": None}
 
 
