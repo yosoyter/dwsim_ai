@@ -342,14 +342,14 @@ def run_full_pipeline(user_question: str) -> None:
             print(f"[llm2] Aborting: {e}")
             return
 
-        # print("\n[LLM #2] Assembly block:")
-        # print("-" * 40)
-        # print(assembly_code)
-        # print("-" * 40)
-        # print("\n[LLM #2] Output block:")
-        # print("-" * 40)
-        # print(output_code)
-        # print("-" * 40)
+        print("\n[LLM #2] Assembly block:", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(assembly_code, file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print("\n[LLM #2] Output block:", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(output_code, file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
 
         # Validate both blocks
         if not validate_output_block(assembly_code):
@@ -372,10 +372,10 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] Heat task detected — generating output block for heater/cooler.")
         generated_code = generate_output_block_code(user_question, task_json)
 
-        # print("\n[LLM #2] Generated output_block code:")
-        # print("-" * 40)
-        # print(generated_code)
-        # print("-" * 40)
+        print("\n[LLM #2] Generated output_block code:", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(generated_code, file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
 
         if not validate_output_block(generated_code):
             print("[llm2] Aborting: generated code failed safety check.")
@@ -394,10 +394,10 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] Comp task detected — generating output block for compressor/expander.")
         generated_code = generate_output_block_code(user_question, task_json)
 
-        # print("\n[LLM #2] Generated output_block code:")
-        # print("-" * 40)
-        # print(generated_code)
-        # print("-" * 40)
+        print("\n[LLM #2] Generated output_block code:", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(generated_code, file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
 
 
         if not validate_output_block(generated_code):
@@ -417,10 +417,10 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] HX task detected — generating output block for heat exchanger.")
         generated_code = generate_output_block_code(user_question, task_json)
 
-        # print("\n[LLM #2] Generated output_block code:")
-        # print("-" * 40)
-        # print(generated_code)
-        # print("-" * 40)
+        print("\n[LLM #2] Generated output_block code:", file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
+        print(generated_code, file=sys.stderr)
+        print("-" * 40, file=sys.stderr)
 
 
         if not validate_output_block(generated_code):
@@ -438,10 +438,10 @@ def run_full_pipeline(user_question: str) -> None:
     # ── Step 2: LLM #2 ────────────────────────────────────────────────────────
     generated_code = generate_output_block_code(user_question, task_json)
 
-    # print("\n[LLM #2] Generated output_block code:")
-    # print("-" * 40)
-    # print(generated_code)
-    # print("-" * 40)
+    print("\n[LLM #2] Generated output_block code:", file=sys.stderr)
+    print("-" * 40, file=sys.stderr)
+    print(generated_code, file=sys.stderr)
+    print("-" * 40, file=sys.stderr)
 
 
     # ── Step 3: Safety check ──────────────────────────────────────────────────
