@@ -32,7 +32,7 @@ SYSTEM_PROMPT_PATH = os.path.join(SCRIPT_DIR, "system_prompt_ft.txt")
 
 # This is where txy_engine.py and flash_engine.py look for input files
 OUTPUT_EXAMPLES_DIR = os.path.join(
-    SCRIPT_DIR, "..", "DWSIM_ry_test", "tasks", "examples"
+    SCRIPT_DIR, "..", "output"
 )
 
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -409,7 +409,7 @@ def run_pipeline(user_question: str) -> dict:
     Returns the payload dict, or None if something went wrong.
     """
     print("=" * 60)
-    print("GROUP 1: LLM Orchestrator")
+    print("LLM Orchestrator")
     print("=" * 60)
     print(f'User Question: "{user_question}"')
 
@@ -421,7 +421,7 @@ def run_pipeline(user_question: str) -> dict:
 
     is_valid = validate_payload(payload)
     if not is_valid:
-        print("\n[PIPELINE] Payload failed validation. Cannot pass to Group 2.")
+        print("\n[PIPELINE] Payload failed validation. Cannot pass on.")
         return None
 
     filepath = save_payload(payload)
@@ -429,12 +429,12 @@ def run_pipeline(user_question: str) -> dict:
     task_type = payload["task_type"]
     engine    = "txy_engine.py" if task_type == "txy" else "flash_engine.py"
 
-    print("\n" + "=" * 60)
-    print(f"FINAL PAYLOAD (task_type: {task_type})")
-    print("=" * 60)
-    print(json.dumps(payload, indent=2))
+    # print("\n" + "=" * 60)
+    # print(f"FINAL PAYLOAD (task_type: {task_type})")
+    # print("=" * 60)
+    # print(json.dumps(payload, indent=2))
     print(f"\n[OUTPUT] Saved to: {filepath}")
-    print(f"[OUTPUT] Group 2 command: python DWSIM_ry_test/tasks/{engine} "
+    print(f"[OUTPUT] Command: python DWSIM_ry_test/tasks/{engine} "
           f"DWSIM_ry_test/tasks/examples/{os.path.basename(filepath)}")
 
     return payload

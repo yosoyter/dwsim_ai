@@ -55,6 +55,20 @@ with open(GUARD_PROMPT_PATH, "r", encoding="utf-8") as f:
 #  (reuses orchestrator_ft.py — no duplication)
 # ─────────────────────────────────────────────────────────────────────────────
 
+from DWSIM_ry_test.tasks.flash_master import OUTPUT_DIR as _OUTPUT_DIR
+
+def _code_save_path(task_json: dict) -> str:
+    """Derive the _code.py save path from the task JSON, mirroring save_payload naming."""
+    comps = "_".join(task_json.get("components", {}).keys())
+    task_type = task_json.get("task_type", "task")
+    steps = task_json.get("steps", [])
+    if steps:
+        names = "_".join(s.get("name", "") for s in steps)
+        filename = f"flowsheet_{names}_{comps}_code.py"
+    else:
+        filename = f"{task_type}_{comps}_code.py"
+    return os.path.join(_OUTPUT_DIR, filename)
+
 def get_task_json(user_question: str) -> dict | None:
     """
     Calls LLM #1 (orchestrator_ft.py) to parse the user question into a task JSON.
@@ -295,9 +309,9 @@ def run_full_pipeline(user_question: str) -> None:
     ----------
     user_question : str   the user's original natural language question
     """
-    print("\n" + "=" * 60)
-    print("DWSIM-AI  |  LLM #2 Pipeline")
-    print("=" * 60)
+    # print("\n" + "=" * 60)
+    # print("SIMQuery  |  LLM #2 Pipeline")
+    # print("=" * 60)
 
     # ── Step 1: LLM #1 ────────────────────────────────────────────────────────
     task_json = get_task_json(user_question)
@@ -328,14 +342,14 @@ def run_full_pipeline(user_question: str) -> None:
             print(f"[llm2] Aborting: {e}")
             return
 
-        print("\n[LLM #2] Assembly block:")
-        print("-" * 40)
-        print(assembly_code)
-        print("-" * 40)
-        print("\n[LLM #2] Output block:")
-        print("-" * 40)
-        print(output_code)
-        print("-" * 40)
+        # print("\n[LLM #2] Assembly block:")
+        # print("-" * 40)
+        # print(assembly_code)
+        # print("-" * 40)
+        # print("\n[LLM #2] Output block:")
+        # print("-" * 40)
+        # print(output_code)
+        # print("-" * 40)
 
         # Validate both blocks
         if not validate_output_block(assembly_code):
@@ -358,10 +372,10 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] Heat task detected — generating output block for heater/cooler.")
         generated_code = generate_output_block_code(user_question, task_json)
 
-        print("\n[LLM #2] Generated output_block code:")
-        print("-" * 40)
-        print(generated_code)
-        print("-" * 40)
+        # print("\n[LLM #2] Generated output_block code:")
+        # print("-" * 40)
+        # print(generated_code)
+        # print("-" * 40)
 
         if not validate_output_block(generated_code):
             print("[llm2] Aborting: generated code failed safety check.")
@@ -380,10 +394,11 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] Comp task detected — generating output block for compressor/expander.")
         generated_code = generate_output_block_code(user_question, task_json)
 
-        print("\n[LLM #2] Generated output_block code:")
-        print("-" * 40)
-        print(generated_code)
-        print("-" * 40)
+        # print("\n[LLM #2] Generated output_block code:")
+        # print("-" * 40)
+        # print(generated_code)
+        # print("-" * 40)
+
 
         if not validate_output_block(generated_code):
             print("[llm2] Aborting: generated code failed safety check.")
@@ -402,10 +417,11 @@ def run_full_pipeline(user_question: str) -> None:
         print("\n[llm2] HX task detected — generating output block for heat exchanger.")
         generated_code = generate_output_block_code(user_question, task_json)
 
-        print("\n[LLM #2] Generated output_block code:")
-        print("-" * 40)
-        print(generated_code)
-        print("-" * 40)
+        # print("\n[LLM #2] Generated output_block code:")
+        # print("-" * 40)
+        # print(generated_code)
+        # print("-" * 40)
+
 
         if not validate_output_block(generated_code):
             print("[llm2] Aborting: generated code failed safety check.")
@@ -422,10 +438,11 @@ def run_full_pipeline(user_question: str) -> None:
     # ── Step 2: LLM #2 ────────────────────────────────────────────────────────
     generated_code = generate_output_block_code(user_question, task_json)
 
-    print("\n[LLM #2] Generated output_block code:")
-    print("-" * 40)
-    print(generated_code)
-    print("-" * 40)
+    # print("\n[LLM #2] Generated output_block code:")
+    # print("-" * 40)
+    # print(generated_code)
+    # print("-" * 40)
+
 
     # ── Step 3: Safety check ──────────────────────────────────────────────────
     if not validate_output_block(generated_code):
