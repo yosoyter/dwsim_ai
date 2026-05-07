@@ -91,6 +91,8 @@ def _filter_line(line: str):
 # Since Gradio generators require yields, we use a simpler approach:
 # show a "Running simulation..." placeholder while processing.
 
+import threading
+
 def run_with_progress(user_input):
     user_input = user_input.strip()
     if not user_input:
@@ -111,25 +113,49 @@ def run_with_progress(user_input):
 
     yield "Query accepted. Generating simulation plan..."
 
+    # Run pipeline in background thread so we can yield progress
+    result_holder = {"output": None, "error": None, "stage": "codegen"}
     buffer = io.StringIO()
-    sys.stdout = buffer
-    try:
-        run_full_pipeline(user_input)
-    except Exception as e:
-        sys.stdout = sys.__stdout__
-        yield f"[ERROR] {e}"
+
+    def pipeline_thread():
+        sys.stdout = buffer
+        try:
+            run_full_pipeline(user_input)
+        except Exception as e:
+            result_holder["error"] = str(e)
+        finally:
+            sys.stdout = sys.__stdout__
+            result_holder["stage"] = "done"
+
+    thread = threading.Thread(target=pipeline_thread, daemon=True)
+    thread.start()
+
+    # Poll and yield status updates while pipeline runs
+    import time
+    shown_dwsim = False
+    while thread.is_alive():
+        time.sleep(1.5)
+        current = buffer.getvalue()
+        if not shown_dwsim and ("[dwsim_core]" in current or "[flowsheet_master]" in current
+                                or "[heat_master]" in current or "[flash_master]" in current
+                                or "[comp_master]" in current or "[hx_master]" in current):
+            yield "Plan generated. Running DWSIM simulation..."
+            shown_dwsim = True
+
+    thread.join()
+
+    if result_holder["error"]:
+        yield f"[ERROR] {result_holder['error']}"
         return
-    finally:
-        sys.stdout = sys.__stdout__
 
     raw = buffer.getvalue()
     lines = [_filter_line(l) for l in raw.splitlines()]
     result = "\n".join(l for l in lines if l is not None).strip()
-    yield result
+    yield result if result else "Simulation complete — no output was returned."
 
 
-with gr.Blocks(title="DWSIM-AI") as demo:
-    gr.Markdown("# DWSIM-AI\nAsk a process simulation question in plain English.")
+with gr.Blocks(title="SIMQuery") as demo:
+    gr.Markdown("# SIMQuery\nAsk a process simulation question in plain English. I handle: flash, heat exchanger, compressor, expander, and flowsheet simulations.")
 
     with gr.Row():
         question = gr.Textbox(
