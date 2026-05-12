@@ -427,15 +427,15 @@ def run_pipeline(user_question: str) -> dict:
     filepath = save_payload(payload)
 
     task_type = payload["task_type"]
-    engine    = "txy_engine.py" if task_type == "txy" else "flash_engine.py"
+    engine    = "txy_engine.py" if task_type == "txy" else "flash_runner.py"
 
     # print("\n" + "=" * 60)
     # print(f"FINAL PAYLOAD (task_type: {task_type})")
     # print("=" * 60)
     # print(json.dumps(payload, indent=2))
     print(f"\n[OUTPUT] Saved to: {filepath}")
-    print(f"[OUTPUT] Command: python DWSIM_ry_test/tasks/{engine} "
-          f"DWSIM_ry_test/tasks/examples/{os.path.basename(filepath)}")
+    print(f"[OUTPUT] Command: python simquery/runners/{engine} "
+          f"output/{os.path.basename(filepath)}")
 
     return payload
 

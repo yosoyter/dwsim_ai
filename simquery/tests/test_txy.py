@@ -276,7 +276,7 @@ class TestFullPipeline:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestExampleJsonFiles:
-    """Verify the example task files in DWSIM_ry_test/tasks/examples/ are valid."""
+    """Verify the example task files in output/ are valid."""
 
     EXAMPLES_DIR = os.path.join(
         os.path.dirname(__file__), "..", "tasks", "examples"

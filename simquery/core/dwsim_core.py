@@ -12,7 +12,7 @@ import sys
 # ─────────────────────────────────────────────────────────────────────────────
 #  CONFIGURATION — update this if DWSIM moves
 # ─────────────────────────────────────────────────────────────────────────────
-DWSIM_PATH = r"C:\\Users\\rickyyu\AppData\\Local\\DWSIM\\"
+DWSIM_PATH = r"C:\Users\terrbear\AppData\Local\DWSIM"
 
 POLAR_COMPONENTS = {
     "WATER", "ETHANOL", "METHANOL", "ACETONE", "ACETIC ACID",

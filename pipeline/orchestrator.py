@@ -77,7 +77,7 @@ def get_task_json(user_question: str) -> dict | None:
     Note: only "flash" task_type is supported here.
     For "txy" tasks, use orchestrator_ft.py + txy_engine.py as before.
     """
-    from LLM.orchestrator_ft import run_pipeline
+    from pipeline.llm1_orchestrator import run_pipeline
     payload = run_pipeline(user_question)
 
     if payload is None:
