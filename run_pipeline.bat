@@ -2,16 +2,25 @@
 REM ============================================================
 REM  DWSIM-AI Full Pipeline — run_pipeline.bat
 REM
+REM  Supports TWO task types (auto-detected from LLM JSON output):
+REM    txy   → simquery/runners/txy_engine.py
+REM    flash → simquery/runners/flash_engine.py
+REM
 REM  USAGE (interactive — will prompt for your question):
 REM    run_pipeline.bat
 REM
-REM  USAGE (non-interactive):
+REM  USAGE (non-interactive, pass query as argument):
 REM    run_pipeline.bat "Txy diagram for ethanol and water at 1 atm"
+REM    run_pipeline.bat "Flash separation of H2, CH4, Benzene, Toluene at 3447370 Pa and 410 K"
 REM
-REM  PREREQUISITES (one-time setup — see SETUP below):
+REM  PREREQUISITES (one-time setup):
 REM    1. conda activate DWSim
 REM    2. set ANTHROPIC_API_KEY=sk-ant-api03-...
-REM    3. pip install anthropic
+REM    3. pip install anthropic pandas numpy matplotlib
+REM
+REM  LLM FILES (as of 2025-03-29):
+REM    pipeline/llm1_orchestrator.py
+REM    pipeline/prompts/llm1_system_prompt.txt   (read automatically by orchestrator_ft.py)
 REM ============================================================
 
 REM ── 1. Check API key ─────────────────────────────────────────
@@ -37,14 +46,14 @@ IF ERRORLEVEL 1 (
 REM ── 4. STEP 1: LLM Orchestrator produces JSON ────────────────
 echo.
 echo ============================================================
-echo  STEP 1 / 2  --  LLM Orchestrator  (Group 1^)
+echo  STEP 1 / 2  --  LLM Orchestrator  (Group 1)
 echo ============================================================
 echo.
 
 IF "%~1"=="" (
-    python LLM/orchestrator.py
+    python pipeline/llm1_orchestrator.py
 ) ELSE (
-    echo %~1 | python LLM/orchestrator.py
+    echo %~1 | python pipeline/llm1_orchestrator.py
 )
 
 IF ERRORLEVEL 1 (
@@ -62,28 +71,61 @@ IF "%LATEST_JSON%"=="" (
     exit /b 1
 )
 
+SET LATEST_JSON_PATH=DWSIM_ry_test\tasks\examples\%LATEST_JSON%
 echo.
-echo [INFO] JSON produced: DWSIM_ry_test\tasks\examples\%LATEST_JSON%
+echo [INFO] JSON produced: %LATEST_JSON_PATH%
 
-REM ── 6. STEP 2: DWSIM Txy Engine produces CSV + PNG ───────────
+REM ── 6. Detect task_type from JSON ────────────────────────────
+REM  Use Python one-liner to extract "task_type" field — handles
+REM  any whitespace/formatting from the LLM output.
+FOR /F "usebackq delims=" %%T IN (
+    `python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('task_type','txy'))" "%LATEST_JSON_PATH%"`
+) DO SET TASK_TYPE=%%T
+
+echo [INFO] Detected task_type: %TASK_TYPE%
+
+REM ── 7. STEP 2: Route to the correct engine ───────────────────
 echo.
 echo ============================================================
-echo  STEP 2 / 2  --  DWSIM Txy Engine  (Group 2^)
+echo  STEP 2 / 2  --  DWSIM Engine  (Group 2)
 echo ============================================================
 echo.
 
-python DWSIM_ry_test/tasks/txy_engine.py ^
-    "DWSIM_ry_test/tasks/examples/%LATEST_JSON%" 
-
-IF ERRORLEVEL 1 (
+IF /I "%TASK_TYPE%"=="txy" (
+    echo [INFO] Running Txy engine...
+    python simquery/runners/txy_engine.py "%LATEST_JSON_PATH%"
+    IF ERRORLEVEL 1 (
+        echo.
+        echo [ERROR] Txy engine failed. See messages above.
+        exit /b 1
+    )
+) ELSE IF /I "%TASK_TYPE%"=="flash" (
+    echo [INFO] Running Flash engine...
+    python simquery/runners/flash_engine.py "%LATEST_JSON_PATH%"
+    IF ERRORLEVEL 1 (
+        echo.
+        echo [ERROR] Flash engine failed. See messages above.
+        exit /b 1
+    )
+) ELSE (
     echo.
-    echo [ERROR] Txy engine failed. See messages above.
+    echo [ERROR] Unknown task_type: "%TASK_TYPE%"
+    echo         Supported types: txy, flash
+    echo         Check pipeline/prompts/llm1_system_prompt.txt to ensure it outputs one of these.
     exit /b 1
 )
 
+REM ── 8. Done — show outputs ────────────────────────────────────
 echo.
 echo ============================================================
 echo  ALL DONE.  Outputs in:  output\
 echo ============================================================
 echo.
-dir output\*.csv output\*.png 2>nul
+echo --- CSV files ---
+dir output\*.csv 2>nul
+echo.
+echo --- PNG files ---
+dir output\*.png 2>nul
+echo.
+echo --- DWSIM flowsheet files ---
+dir output\*.dwxmz 2>nul

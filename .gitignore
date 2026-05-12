@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# macOS junk
+.DS_Store
+._.DS_Store
+._*
+
+# DWSIM output files (generated at runtime)
+output/
+*.dwxmz
+
+# LLM-generated JSON and code (runtime artifacts)
+simquery/runners/examples/
+pipeline/examples/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Test cache
+.pytest_cache/
+.coverage
