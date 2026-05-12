@@ -2,6 +2,10 @@ import gradio as gr
 import sys, io, os
 os.environ["DWSIM_AI_VERBOSE"] = "0"
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.abspath(os.path.join(_HERE, ".."))
+sys.path.insert(0, _ROOT)
+
 from pipeline.orchestrator import guard_query, run_full_pipeline
 
 def run_pipeline(user_input):
