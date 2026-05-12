@@ -101,5 +101,5 @@ Compress a 50/50 propane/n-butane vapor from 5 bar, 60°C to 20 bar, then flash 
 
 ## Team
 
-Caleb Medina, Arman Flores, Ricky Yu, Kristopher Hoyt, Terry Cheng  
+Terry Cheng, Arman Flores, Caleb Medina, Ricky Yu, Kristopher Hoyt 
 Johns Hopkins University — Whiting School of Engineering
